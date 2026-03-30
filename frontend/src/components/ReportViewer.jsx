@@ -1,17 +1,26 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { FileDown, ExternalLink, AlertCircle, RefreshCw } from 'lucide-react';
 
 const ReportViewer = ({ runId }) => {
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchReport = async () => {
+      if (!runId) {
+        setLoading(false);
+        return;
+      }
       try {
+        setLoading(true);
+        setError(null);
         const response = await axios.get(`http://localhost:8000/api/v1/reports/${runId}`);
         setReportData(response.data);
-      } catch (error) {
-        console.error('Error fetching report:', error);
+      } catch (err) {
+        console.error('Error fetching report:', err);
+        setError('Failed to load report data. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -32,38 +41,92 @@ const ReportViewer = ({ runId }) => {
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
-    } catch (error) {
-      console.error('Error downloading PDF:', error);
+    } catch (err) {
+      console.error('Error downloading PDF:', err);
     }
   };
 
-  if (loading) {
-    return <div className="text-slate-400">Loading report...</div>;
+  const handleOpenBrowser = () => {
+    if (reportData && reportData.html_content) {
+      const blob = new Blob([reportData.html_content], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+    }
+  };
+
+  if (!runId) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400">
+        <AlertCircle className="w-16 h-16 mb-4 text-slate-600" />
+        <h2 className="text-xl font-semibold text-slate-200">No Report Selected</h2>
+        <p className="mt-2 text-slate-500">Run an analysis from the Dashboard or select one from History.</p>
+      </div>
+    );
   }
 
-  if (!reportData) {
-    return <div className="text-red-500">Failed to load report.</div>;
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] text-slate-400">
+        <RefreshCw className="w-12 h-12 mb-4 text-blue-500 animate-spin" />
+        <h2 className="text-lg font-medium">Processing Report Document...</h2>
+      </div>
+    );
   }
+
+  if (error || !reportData) {
+    return (
+      <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-6 text-center max-w-lg mx-auto mt-20">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+        <h2 className="text-lg font-semibold text-red-400 mb-2">Error Loading Report</h2>
+        <p className="text-slate-300">{error || 'Report data is unavailable.'}</p>
+      </div>
+    );
+  }
+
+  const generatedDate = new Date(reportData.generated_at).toLocaleString();
 
   return (
-    <div className="bg-slate-900 text-slate-100 p-4">
-      <h1 className="text-2xl mb-4">Report Viewer</h1>
-      <div className="mb-4">
-        <p><strong>Building ID:</strong> {reportData.building_id}</p>
-        <p><strong>Generated At:</strong> {reportData.generated_at}</p>
-        <p><strong>Status:</strong> {reportData.status}</p>
+    <div className="h-full flex flex-col space-y-6">
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 shadow-lg flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-slate-100">{reportData.building_id || 'Building Report'}</h1>
+            <span className="px-3 py-1 bg-green-500/20 text-green-400 border border-green-500/50 rounded-full text-xs font-bold tracking-wider">
+              {reportData.status || 'COMPLETED'}
+            </span>
+          </div>
+          <div className="flex items-center gap-4 mt-2 text-sm text-slate-400">
+            <p>Run ID: <span className="font-mono text-slate-300">{runId}</span></p>
+            <span className="w-1 h-1 bg-slate-600 rounded-full"></span>
+            <p>Generated: <span className="text-slate-300">{generatedDate}</span></p>
+          </div>
+        </div>
       </div>
-      <iframe
-        srcDoc={reportData.html_content}
-        title="Report"
-        className="w-full h-96 border border-slate-700"
-      ></iframe>
-      <button
-        onClick={handleDownloadPDF}
-        className="mt-4 bg-blue-500 text-white p-2 rounded"
-      >
-        Download PDF
-      </button>
+
+      <div className="flex-1 bg-white rounded-xl overflow-hidden shadow-lg border border-slate-700 min-h-[500px]">
+        <iframe
+          srcDoc={reportData.html_content}
+          title="Analysis Report"
+          className="w-full h-full bg-white"
+        />
+      </div>
+
+      <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 shadow-lg flex justify-end gap-4">
+        <button
+          onClick={handleOpenBrowser}
+          className="px-6 py-2.5 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg transition-colors flex items-center gap-2 font-medium"
+        >
+          <ExternalLink className="w-4 h-4" />
+          Open in Browser
+        </button>
+        <button
+          onClick={handleDownloadPDF}
+          className="px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors shadow-lg shadow-blue-500/20 flex items-center gap-2 font-medium"
+        >
+          <FileDown className="w-4 h-4" />
+          Download PDF
+        </button>
+      </div>
     </div>
   );
 };
