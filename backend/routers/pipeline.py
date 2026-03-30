@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from loguru import logger
@@ -84,15 +84,16 @@ def _generate_run_id() -> str:
 
 
 @router.post("/api/v1/pipeline/run", response_model=PipelineRunCreateResponse)
-async def run_pipeline(
+async def run_pipeline_endpoint(
     request: PipelineRunCreateRequest,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db_session),
 ) -> PipelineRunCreateResponse:
     """
-    Trigger a new pipeline run (stub).
-
-    This endpoint creates a `PipelineRun` row in the SQLite database and marks
-    it as `queued`. The actual CrewAI execution is added in a later phase.
+    Trigger a new pipeline run.
+    
+    This endpoint creates a `PipelineRun` row in the SQLite database, marks
+    it as `queued`, and dispatches the execution to a background task.
     """
 
     try:
@@ -104,6 +105,13 @@ async def run_pipeline(
         )
         db.add(run)
         db.commit()
+        
+        inputs = request.model_dump()
+        inputs["metadata_path"] = "data/raw/metadata.csv"
+        
+        from ..pipeline import run_pipeline
+        background_tasks.add_task(run_pipeline, run_id, inputs)
+        
         return PipelineRunCreateResponse(run_id=run_id, status="queued")
     except Exception as exc:  # noqa: BLE001 - boundary for API error handling
         logger.exception("Failed to create pipeline run: {}", exc)

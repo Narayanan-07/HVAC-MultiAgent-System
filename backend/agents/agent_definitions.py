@@ -37,8 +37,15 @@ from backend.agents.tools.report_tools import (
     generate_pdf_report
 )
 
-# Placeholder for Agent 1 if needed later (Ingestion Agent)
-# data_engineer = Agent(...)
+ingestion_agent = Agent(
+    role="Data Engineer",
+    goal="Transform raw CSVs into a clean, analysis-ready dataframe",
+    backstory="Expert in building energy data pipelines and sensor data quality.",
+    tools=[],
+    llm=llm,
+    verbose=True,
+    allow_delegation=False
+)
 
 analyzer_agent = Agent(
     role="HVAC Performance Diagnostician",
