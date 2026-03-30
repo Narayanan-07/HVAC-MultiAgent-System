@@ -16,6 +16,19 @@ from backend.agents.tools.forecast_tools import (
     predict_peak_demand_windows
 )
 
+from backend.agents.tools.optimization_tools import (
+    optimize_setpoints,
+    recommend_chiller_sequencing,
+    plan_load_shifting,
+    score_maintenance_priority,
+    compile_final_recommendations
+)
+
+from backend.agents.tools.memory_tools import (
+    store_recommendations_in_memory,
+    query_similar_past_recommendations
+)
+
 # Placeholder for Agent 1 if needed later (Ingestion Agent)
 # data_engineer = Agent(...)
 
@@ -45,6 +58,24 @@ forecast_agent = Agent(
         run_prophet_forecast, 
         run_xgboost_forecast, 
         predict_peak_demand_windows
+    ],
+    llm=llm,
+    verbose=True,
+    allow_delegation=False
+)
+
+optimizer_agent = Agent(
+    role="HVAC Optimization Engineer",
+    goal="Convert analytical insights into safe, explainable operational actions",
+    backstory="Energy consultant who has optimized HVAC systems across 50+ commercial buildings.",
+    tools=[
+        optimize_setpoints,
+        recommend_chiller_sequencing,
+        plan_load_shifting,
+        score_maintenance_priority,
+        compile_final_recommendations,
+        store_recommendations_in_memory,
+        query_similar_past_recommendations
     ],
     llm=llm,
     verbose=True,
