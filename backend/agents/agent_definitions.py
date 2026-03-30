@@ -29,6 +29,14 @@ from backend.agents.tools.memory_tools import (
     query_similar_past_recommendations
 )
 
+from backend.agents.tools.report_tools import (
+    generate_forecast_chart,
+    generate_efficiency_trend_chart,
+    generate_energy_heatmap,
+    render_html_report,
+    generate_pdf_report
+)
+
 # Placeholder for Agent 1 if needed later (Ingestion Agent)
 # data_engineer = Agent(...)
 
@@ -76,6 +84,22 @@ optimizer_agent = Agent(
         compile_final_recommendations,
         store_recommendations_in_memory,
         query_similar_past_recommendations
+    ],
+    llm=llm,
+    verbose=True,
+    allow_delegation=False
+)
+
+reporter_agent = Agent(
+    role="Technical Report Writer",
+    goal="Produce a clear, complete, and actionable technical decision report",
+    backstory="Engineering documentation specialist who translates AI outputs into operational clarity.",
+    tools=[
+        generate_forecast_chart,
+        generate_efficiency_trend_chart,
+        generate_energy_heatmap,
+        render_html_report,
+        generate_pdf_report
     ],
     llm=llm,
     verbose=True,

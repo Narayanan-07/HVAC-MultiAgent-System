@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>HVAC Optimization Decision Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
+        h1, h2, h3 { color: #2c3e50; }
+        .header { text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 30px; }
+        .executive-summary { background: #f9f9f9; padding: 20px; border-left: 5px solid #3498db; margin-bottom: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .dashboard { display: flex; justify-content: space-between; align-items: center; background: #ecf0f1; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: center; }
+        .dashboard-item { flex: 1; }
+        .dashboard-number { font-size: 3em; font-weight: bold; color: #2980b9; }
+        .badge { display: inline-block; padding: 5px 10px; border-radius: 12px; font-weight: bold; color: white; font-size: 0.9em; }
+        .badge.A { background-color: #27ae60; }
+        .badge.B { background-color: #2ecc71; }
+        .badge.C { background-color: #f1c40f; color: #333; }
+        .badge.D { background-color: #e67e22; }
+        .badge.F { background-color: #e74c3c; }
+        .badge.CRITICAL { background-color: #c0392b; }
+        .badge.HIGH { background-color: #e67e22; }
+        .badge.MEDIUM { background-color: #f39c12; }
+        .badge.LOW { background-color: #27ae60; }
+        .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .chart-container { text-align: center; margin-bottom: 40px; }
+        .chart-container img { max-width: 100%; height: auto; border: 1px solid #ddd; padding: 10px; background: white; }
+        .trend-up { color: #e74c3c; font-weight: bold; }
+        .trend-down { color: #27ae60; font-weight: bold; }
+        .page-break { page-break-before: always; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>HVAC Optimization Decision Report</h1>
+        <p><strong>Building ID:</strong> {{ building_id }} | <strong>Run Date:</strong> {{ run_date }}</p>
+    </div>
+
+    <div class="executive-summary">
+        <h2>1. Executive Summary</h2>
+        <p>{{ executive_summary }}</p>
+    </div>
+
+    <h2>2. Data Quality Scorecard</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Column</th>
+                <th>Completeness %</th>
+                <th>Quality Flag</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in data_quality_scorecard %}
+            <tr>
+                <td>{{ row.column }}</td>
+                <td>{{ row.completeness }}%</td>
+                <td>{{ row.quality_flag }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="page-break"></div>
+
+    <h2>3. Efficiency Dashboard</h2>
+    <div class="dashboard">
+        <div class="dashboard-item">
+            <h3>Current Avg iKW-TR</h3>
+            <div class="dashboard-number">{{ efficiency.current_avg_ikwtr }}</div>
+            <p>Benchmark: 0.60</p>
+        </div>
+        <div class="dashboard-item">
+            <h3>Efficiency Grade</h3>
+            <span class="badge {{ efficiency.grade }}">{{ efficiency.grade }}</span>
+        </div>
+        <div class="dashboard-item">
+            <h3>30-Day Trend</h3>
+            <div class="{{ 'trend-up' if efficiency.trend_direction == 'up' else 'trend-down' }}">
+                {{ '↑' if efficiency.trend_direction == 'up' else '↓' }} {{ efficiency.trend_percentage }}%
+            </div>
+        </div>
+    </div>
+
+    <h2>4. Anomaly Log</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Parameter</th>
+                <th>Severity</th>
+                <th>Root Cause</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in anomaly_report %}
+            <tr>
+                <td>{{ item.timestamp }}</td>
+                <td>{{ item.parameter }}</td>
+                <td><span class="badge {{ item.severity | upper }}">{{ item.severity }}</span></td>
+                <td>{{ item.root_cause }}</td>
+                <td>{{ item.description }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <div class="page-break"></div>
+    
+    <h2>5. Energy Forecast & Charts</h2>
+    <div class="chart-container">
+        <h3>24-Hour Energy Demand Forecast</h3>
+        <img src="data:image/png;base64,{{ forecast_chart_b64 }}" alt="Forecast Chart">
+    </div>
+
+    <div class="chart-container">
+        <h3>iKW-TR Efficiency Trend</h3>
+        <img src="data:image/png;base64,{{ efficiency_chart_b64 }}" alt="Efficiency Trend Chart">
+    </div>
+
+    <div class="chart-container">
+        <h3>Energy Consumption Heatmap</h3>
+        <img src="data:image/png;base64,{{ heatmap_chart_b64 }}" alt="Energy Heatmap Chart">
+    </div>
+
+    <div class="page-break"></div>
+
+    <h2>6. Top 5 Recommendations</h2>
+    {% for rec in recommendations %}
+    <div class="card" style="border-left: 5px solid {% if rec.priority == 'CRITICAL' %}#c0392b{% elif rec.priority == 'HIGH' %}#e67e22{% elif rec.priority == 'MEDIUM' %}#f39c12{% else %}#27ae60{% endif %};">
+        <div class="card-header">
+            <h3>#{{ loop.index }} - {{ rec.action }}</h3>
+            <span class="badge {{ rec.priority | upper }}">{{ rec.category }}</span>
+        </div>
+        <p><strong>Rationale:</strong> {{ rec.rationale }}</p>
+        <p><strong>Expected Impact:</strong> {{ rec.expected_impact }}</p>
+    </div>
+    {% endfor %}
+
+    <h2>7. Maintenance Priority</h2>
+    {% for maint in maintenance %}
+    <div class="card" style="border-left: 5px solid {% if maint.priority == 'CRITICAL' %}#c0392b{% elif maint.priority == 'HIGH' %}#e67e22{% elif maint.priority == 'MEDIUM' %}#f39c12{% else %}#27ae60{% endif %};">
+        <div class="card-header">
+            <h3>{{ maint.recommended_action }}</h3>
+            <span class="badge {{ maint.priority | upper }}">{{ maint.priority | upper }}</span>
+        </div>
+        <p><strong>Urgency:</strong> Act within {{ maint.urgency_days }} days</p>
+    </div>
+    {% endfor %}
+
+</body>
+</html>
