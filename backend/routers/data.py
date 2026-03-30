@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
 
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, HTTPException, Request, Query, UploadFile, File
+import pandas as pd
 from loguru import logger
 
 from ..config import settings
@@ -23,7 +24,7 @@ _RAW_DIR: Final[Path] = Path(settings.DATA_DIR) / "raw"
 
 @router.post("/api/v1/data/upload")
 async def upload_csv(
-    request: Request,
+    file: UploadFile = File(..., description="The CSV file to upload."),
     filename: str | None = Query(
         default=None,
         description="Optional output filename (e.g., dataset.csv).",
@@ -31,44 +32,41 @@ async def upload_csv(
 ) -> dict:
     """
     Upload a CSV dataset and persist it to `data/raw/`.
-
-    Implementation notes:
-    - To keep dependencies minimal, this endpoint accepts raw CSV bytes
-      in the request body (e.g., `Content-Type: text/csv`).
-    - For `multipart/form-data` upload support, `python-multipart` should be
-      added later and the endpoint adjusted accordingly.
+    Validates file is a CSV and counts rows/columns.
     """
-
     try:
-        body = await request.body()
+        body = await file.read()
         if not body:
-            raise HTTPException(status_code=400, detail="Request body is empty.")
-
-        content_type = (request.headers.get("content-type") or "").lower()
-        if ("csv" not in content_type) and filename is None:
-            # If the user didn't explicitly provide a filename, require CSV-ish content-type.
-            raise HTTPException(
-                status_code=400,
-                detail="Provide a CSV request body or specify `?filename=...`.",
-            )
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
 
         _RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-        inferred_ext = ".csv" if (filename is None or not filename.lower().endswith(".csv")) else ""
-        chosen_name = filename or f"upload_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}"
-        if not chosen_name.lower().endswith(".csv"):
-            chosen_name = f"{chosen_name}{inferred_ext or '.csv'}"
-
+        chosen_name = filename or file.filename or f"upload_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+        
         # Basic sanitation: keep only the last path segment.
         chosen_name = Path(chosen_name).name
+        if not chosen_name.lower().endswith(".csv"):
+            chosen_name += ".csv"
 
         save_path = _RAW_DIR / chosen_name
         save_path.write_bytes(body)
 
+        # Validate with pandas
+        try:
+            df = pd.read_csv(save_path)
+            rows, columns = df.shape
+            validation_status = "success"
+        except Exception as e:
+            # If it fails to parse, it might not be a valid CSV
+            save_path.unlink(missing_ok=True)
+            logger.exception("Invalid CSV file uploaded: {}", e)
+            raise HTTPException(status_code=400, detail="Invalid CSV file format.") from e
+
         return {
             "filename": chosen_name,
-            "saved_path": str(save_path),
-            "size_bytes": len(body),
+            "rows": rows,
+            "columns": columns,
+            "validation_status": validation_status,
         }
     except HTTPException:
         raise
