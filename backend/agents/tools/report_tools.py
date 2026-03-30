@@ -6,6 +6,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import plotly.io as pio
 from crewai.tools import tool
+from loguru import logger
 try:
     import pdfkit
     PDFKIT_AVAILABLE = True
