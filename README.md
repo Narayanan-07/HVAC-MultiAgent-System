@@ -1,4 +1,4 @@
-# 🏢 Multi-Agent HVAC Optimization System
+# Multi-Agent HVAC Optimization System
 
 <div align="center">
 
@@ -7,78 +7,78 @@
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green?style=for-the-badge&logo=fastapi)
 ![Electron](https://img.shields.io/badge/Electron-29-blue?style=for-the-badge&logo=electron)
 ![Gemini](https://img.shields.io/badge/Gemini-2.0_Flash-purple?style=for-the-badge&logo=google)
-![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)
 
 **A production-grade, local-first multi-agent AI system that autonomously converts raw HVAC building energy data into explainable operational decisions and automated technical reports.**
 
-[Features](#features) • [Architecture](#architecture) • [Agents](#agents) • [Dataset](#dataset) • [Quickstart](#quickstart) • [API](#api-reference) • [Research](#research-novelty)
+[Features](#features) • [Architecture](#architecture) • [Agents](#agents) • [Dataset](#dataset) • [Quickstart](#quickstart) • [API](#api-reference) • [System Differentiation](#system-differentiation)
 
 </div>
 
 ---
 
-## 🎯 Problem Statement
+## Problem Statement
 
 Commercial building HVAC systems consume nearly **40% of total building energy**, yet facility managers lack intelligent tools to convert raw operational data into timely, explainable decisions. Existing AI approaches rely on simulation environments, operate on single buildings, produce black-box decisions, and fail to deliver actionable technical reports to human operators — creating a critical gap between AI research and real-world facility management.
 
 ---
 
-## ✨ Features
+## Features
 
-- **5-Agent CrewAI Pipeline** — Sequential multi-agent orchestration: Ingest → Analyze → Forecast → Optimize → Report
-- **Real Multi-Building Data** — Processes BDG2 dataset: 307 commercial buildings, 5.2M rows, 2016–2017 hourly
-- **4 Core HVAC Parameters** — kWh consumption, iKW-TR efficiency metric, ambient conditions (Temp/Humidity/WBT), load profiles
-- **Anomaly Detection** — Isolation Forest + Z-Score with root cause classification (weather/equipment/behavioral)
-- **Energy Forecasting** — Prophet (primary) + XGBoost (fallback), 24h and 168h horizons with confidence intervals
-- **Explainable Recommendations** — Every optimization action includes a technical rationale
-- **Automated Reports** — PDF + HTML decision reports with Plotly charts, generated per analysis run
-- **Desktop Interface** — Electron app with dark SaaS-style dashboard, report viewer, and history
-
----
-
-## 🏗️ Architecture
-
-```
-╔══════════════════════════════════════════════════════════════╗
-║                    ELECTRON DESKTOP APP                      ║
-║   Dashboard │ Report Viewer │ Analysis History               ║
-╚══════════════════════╤═══════════════════════════════════════╝
-                       │ HTTP REST (localhost:8000)
-╔══════════════════════▼═══════════════════════════════════════╗
-║                    FASTAPI BACKEND                           ║
-║   POST /pipeline/run │ GET /pipeline/status │ GET /reports   ║
-╚══════════════════════╤═══════════════════════════════════════╝
-                       │
-╔══════════════════════▼═══════════════════════════════════════╗
-║                 CREWAI AGENT PIPELINE                        ║
-║                                                              ║
-║  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐    ║
-║  │ Agent 1  │→ │ Agent 2  │→ │ Agent 3  │→ │ Agent 4  │→.. ║
-║  │ Ingest   │  │ Analyze  │  │ Forecast │  │ Optimize │    ║
-║  └──────────┘  └──────────┘  └──────────┘  └──────────┘    ║
-║                                                  ↓           ║
-║                                           ┌──────────┐      ║
-║                                           │ Agent 5  │      ║
-║                                           │  Report  │      ║
-║                                           └──────────┘      ║
-╚═════════════╤════════════════════╤════════════════╤══════════╝
-              ↓                    ↓                ↓
-        ┌──────────┐        ┌──────────┐    ┌──────────┐
-        │  SQLite  │        │ ChromaDB │    │   File   │
-        │    DB    │        │  Memory  │    │  System  │
-        └──────────┘        └──────────┘    └──────────┘
-                                    ↑
-                            ┌──────────────┐
-                            │ Open-Meteo   │
-                            │ Weather API  │
-                            └──────────────┘
-```
-
-> 📐 See `docs/HVAC Architecture.png` for the full visual architecture diagram.
+- **5-Agent CrewAI Pipeline** — Sequential multi-agent orchestration: Ingest → Analyze → Forecast → Optimize → Report.
+- **Real Multi-Building Data** — Processes BDG2 dataset: 307 commercial buildings, 5.2M rows, 2016–2017 hourly.
+- **4 Core HVAC Parameters** — kWh consumption, iKW-TR efficiency metric, ambient conditions (Temp/Humidity/WBT), load profiles.
+- **Anomaly Detection** — Isolation Forest + Z-Score with root cause classification (weather/equipment/behavioral).
+- **Energy Forecasting** — Prophet (primary) + XGBoost (fallback), 24h and 168h horizons with confidence intervals.
+- **Explainable Recommendations** — Every optimization action includes a technical rationale.
+- **Automated Reports** — PDF + HTML decision reports with Plotly charts, generated per analysis run.
+- **Desktop Interface** — Electron app with dark SaaS-style dashboard, report viewer, and analysis history.
 
 ---
 
-## 🤖 Agents
+## Previews
+
+*(Replace the placeholder links below with your actual project screenshots or GIFs)*
+
+<p align="center">
+  <img src="docs/placeholder-dashboard.png" width="48%" alt="Dashboard Overview">
+  <img src="docs/placeholder-report.png" width="48%" alt="Generated PDF Report">
+</p>
+
+---
+
+## Architecture
+
+```text
+=======================================================================
+                    ELECTRON DESKTOP APP                      
+   Dashboard | Report Viewer | Analysis History               
+=======================================================================
+                       | HTTP REST (localhost:8000)
+=======================v===============================================
+                    FASTAPI BACKEND                           
+   POST /pipeline/run | GET /pipeline/status | GET /reports   
+=======================v===============================================
+                       |
+=======================v===============================================
+                 CREWAI AGENT PIPELINE                        
+                                                              
+  [ Agent 1 ]  [ Agent 2 ]  [ Agent 3 ]  [ Agent 4 ]    
+  [ Ingest  ]->[ Analyze ]->[ Forecast]->[ Optimize].. 
+                                                 |           
+                                          [ Agent 5 ]      
+                                          [  Report ]      
+=======================================================================
+              |                    |                |
+        [ SQLite DB ]      [ ChromaDB ]     [ File System ]
+                                   ^
+                           [ Open-Meteo API ]
+```
+
+> See `docs/HVAC Architecture.png` for the full visual architecture diagram.
+
+---
+
+## Agents
 
 | # | Agent | Role | Key Capabilities |
 |---|-------|------|-----------------|
@@ -90,7 +90,7 @@ Commercial building HVAC systems consume nearly **40% of total building energy**
 
 ---
 
-## 📊 Dataset
+## Dataset
 
 This system uses the **[Building Data Genome Project 2 (BDG2)](https://github.com/buds-lab/building-data-genome-project-2)** — a real-world open dataset of commercial building energy consumption.
 
@@ -103,7 +103,7 @@ This system uses the **[Building Data Genome Project 2 (BDG2)](https://github.co
 | Sites | Multiple (Panther, Fox, Eagle, Hog, Bull, etc.) |
 
 **Files needed:**
-```
+```text
 data/raw/
 ├── chilledwater.csv     # Chilled water meter readings (kWh) — wide format
 ├── electricity.csv      # Electricity consumption (kWh) — wide format
@@ -116,18 +116,18 @@ data/raw/
 | Parameter | Source | Formula |
 |-----------|--------|---------|
 | `kWh` | electricity.csv | Direct meter reading |
-| `iKW-TR` | Both CSVs | `electricity_kW / (chilledwater_kWh × 0.9699)` |
+| `iKW-TR` | Both CSVs | `electricity_kW / (chilledwater_kWh * 0.9699)` |
 | `Ambient Conditions` | weather.csv | airTemp, dewTemp → RH (Magnus), WBT (Stull 2011) |
 | `Load Profiles` | electricity.csv | Rolling avg, percentile categorization, day patterns |
 
 ---
 
-## 🚀 Quickstart
+## Quickstart
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) (for PDF generation — Windows 64-bit)
+- [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) (for PDF generation)
 - [Gemini API Key](https://aistudio.google.com) (free tier)
 
 ### 1. Clone & Setup
@@ -156,7 +156,7 @@ cp .env.example .env
 ```
 
 Edit `.env`:
-```
+```env
 GEMINI_API_KEY=your_gemini_key_here
 DATABASE_URL=sqlite:///./hvac_system.db
 REPORTS_DIR=reports
@@ -173,37 +173,30 @@ Then run the data preparation pipeline:
 python scripts/prepare_data.py
 ```
 
-Expected output:
-```
-Data quality score: 83.1 — PASS
-307 buildings | 5.2M rows | 2016-2017
-features_final.csv saved to data/processed/
-```
-
 ### 4. Start Backend
 
 ```bash
 uvicorn backend.main:app --port 8000
 ```
 
-Verify: `http://localhost:8000/health` → `{"status": "ok", "version": "1.0.0"}`
+Verify status by navigating to `http://localhost:8000/health`.
 
 ### 5. Start Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev        # React dev server (port 3000)
+npm run dev        # React dev server
 npx electron .     # Electron desktop window
 ```
 
 ### 6. Run Analysis
 
-Open the Electron app → Dashboard → Upload CSVs → Enter building ID → Click **Run Analysis**
+Open the Electron app -> Dashboard -> Upload CSVs -> Enter building ID -> Click **Run Analysis**
 
 ---
 
-## 🧪 Testing
+## Testing
 
 Generate test fixtures first:
 ```bash
@@ -225,138 +218,90 @@ pytest tests/ -v --cov=backend --cov-report=term-missing
 
 ---
 
-## 🌐 API Reference
+## API Reference
 
 ### Base URL: `http://localhost:8000/api/v1`
 
 | Endpoint | Method | Description | Request Body |
 |----------|--------|-------------|-------------|
 | `/pipeline/run` | POST | Trigger full 5-agent pipeline | `{building_id, dataset_path, forecast_horizon_hours, lat, lon}` |
-| `/pipeline/status/{run_id}` | GET | Poll pipeline execution status | — |
-| `/reports/{run_id}` | GET | Get HTML report + metadata | — |
-| `/reports/{run_id}/pdf` | GET | Download PDF report | — |
-| `/data/upload` | POST | Upload CSV dataset | `multipart/form-data` |
-| `/history` | GET | Last 20 pipeline runs | — |
-| `/health` | GET | Health check | — |
-
-**Example — Trigger Pipeline:**
-```bash
-curl -X POST http://localhost:8000/api/v1/pipeline/run \
-  -H "Content-Type: application/json" \
-  -d '{"building_id": "Eagle_office_Amanda", "dataset_path": "data/processed/features_final.csv", "forecast_horizon_hours": 24, "lat": 13.08, "lon": 80.27}'
-```
-
-**Response:**
-```json
-{"run_id": "run_20260331_143022", "status": "queued"}
-```
+| `/pipeline/status/{run_id}` | GET | Poll pipeline execution status | None |
+| `/reports/{run_id}` | GET | Get HTML report + metadata | None |
+| `/reports/{run_id}/pdf` | GET | Download PDF report | None |
+| `/history` | GET | Last 20 pipeline runs | None |
+| `/health` | GET | Health check | None |
 
 ---
 
-## 🔬 Research Novelty
+## System Differentiation 
 
-This project directly addresses **5 limitations** explicitly identified in the 2025 systematic review:
+This platform directly bridges the gap between academic HVAC research and practical industry application. It explicitly targets limitations identified in modern systematic reviews (e.g., *Aghili et al., "Artificial Intelligence Approaches to Energy Management in HVAC Systems", Buildings 2025*):
 
-> *Aghili et al., "Artificial Intelligence Approaches to Energy Management in HVAC Systems: A Systematic Review", Buildings 2025, 15, 1008*
-
-| Gap in Literature | This System |
+| Common Industry Limitation | System Approach |
 |---|---|
-| ❌ Black-box AI — no explainability | ✅ Every recommendation includes technical rationale |
-| ❌ Simulated/synthetic data only | ✅ Real BDG2 dataset — 307 buildings, 5.2M rows |
-| ❌ Single building, single zone | ✅ Multi-building: lodging, office, retail |
-| ❌ No automated report for operators | ✅ Auto PDF + HTML decision report per run |
-| ❌ No LLM-based orchestration | ✅ CrewAI + Gemini 2.0 Flash multi-agent pipeline |
-| ❌ iKW-TR not used as metric | ✅ iKW-TR derived and used as core efficiency metric |
-| ❌ No end-to-end pipeline | ✅ Raw CSV → Analysis → Forecast → Optimize → Report |
-| ❌ No facility manager interface | ✅ Electron desktop app for non-technical users |
+| Black-box AI without explainability | Every recommendation includes a technical rationale for operators |
+| Systems bound to simulated datasets | Validated entirely on the real-world BDG2 dataset (307 buildings) |
+| Lacking facility manager interfaces | Includes a dedicated Electron desktop app tailored for non-technical users |
+| Missing automated documentation | Generates completely standalone PDF and HTML decision reports per run |
+| Pure algorithmic logic without deduction | Utilizes an LLM multi-agent orchestration pattern (CrewAI + Gemini) |
 
-**Novelty Statement:**
-
-> *This is the first LLM-orchestrated multi-agent architecture (CrewAI + Gemini) that combines anomaly detection, energy forecasting, HVAC optimization, and explainable automated report generation for commercial buildings using real multi-building operational data — without requiring simulation environments, RL training, or cloud infrastructure.*
+This architecture proves that multi-agent systems can handle end-to-end data ingestion, algorithmic forecasting, and explainable reporting locally without relying heavily on cloud infrastructure.
 
 ---
 
-## 📁 Project Structure
+## Challenges & Learnings
 
-```
+- **Agent Hallucinations in Technical Output:** Initially, agents would hallucinate HVAC parameters. This was resolved by equipping them with rigid tools to execute deterministically (e.g., Python-based Isolation Forests and Prophet algorithms), utilizing the LLM exclusively for orchestration and reasoning layer tasks rather than raw math.
+- **Handling High-Dimensional Time-Series:** Processing 5.2 million rows of wide-format data efficiently required shifting away from naive pandas loading to optimized melting and chunking strategies before handing aggregates to agents.
+- **Bridging Asynchronous AI with UI State:** Long-running CrewAI pipelines (taking minutes) made generic HTTP request patterns timeout. I implemented an asynchronous queue and polling mechanism with SQLite state tracking so the Electron UI remained perfectly responsive during the run.
+
+---
+
+## Project Structure
+
+```text
 hvac-multiagent-system/
 ├── backend/
 │   ├── main.py                    # FastAPI app
 │   ├── config.py                  # Settings
 │   ├── database.py                # SQLAlchemy models
-│   ├── llm.py                     # Gemini LLM client
 │   ├── pipeline.py                # Async pipeline runner
-│   ├── data_pipeline.py           # Data preparation
 │   ├── agents/
 │   │   ├── agent_definitions.py   # All 5 CrewAI agents
 │   │   ├── task_definitions.py    # All 5 CrewAI tasks
 │   │   ├── crew.py                # Crew assembly
 │   │   └── tools/                 # Agent tools
-│   │       ├── data_tools.py
-│   │       ├── anomaly_tools.py
-│   │       ├── forecast_tools.py
-│   │       ├── weather_tools.py
-│   │       ├── optimization_tools.py
-│   │       └── report_tools.py
-│   ├── routers/
-│   │   ├── pipeline.py
-│   │   ├── reports.py
-│   │   └── data.py
-│   └── templates/
-│       └── report_template.html
+│   ├── routers/                   # API routes
+│   └── templates/                 # Report Jinja2 templates
 ├── frontend/                      # Electron + React app
-├── data/
-│   ├── raw/                       # Input CSVs
-│   └── processed/                 # Engineered features
-├── reports/
-│   ├── pdf/                       # Generated PDFs
-│   └── html/                      # Generated HTML reports
+├── data/                          # BDG2 datasets (raw & processed)
+├── reports/                       # Generated PDFs & HTML reports
 ├── tests/                         # pytest suite
-├── scripts/
-│   └── prepare_data.py            # Data preparation script
-├── docs/
-│   └── HVAC Architecture.png      # System architecture diagram
-├── .env.example
-├── requirements.txt
-└── README.md
+└── scripts/                       # Data prep utilities
 ```
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Multi-Agent Framework | CrewAI | 1.9.3 |
-| LLM | Google Gemini 2.0 Flash | — |
-| Backend | FastAPI + Uvicorn | 0.110.0 |
-| Data Processing | Pandas + NumPy | 2.2.3 |
-| Anomaly Detection | Scikit-learn (IsolationForest) | 1.5.2 |
-| Forecasting | Prophet + XGBoost | 1.1.5 / 2.1.3 |
-| Vector Memory | ChromaDB | 1.1.0 |
-| Report Generation | Jinja2 + pdfkit + Plotly | — |
-| Database | SQLite (SQLAlchemy) | — |
-| Desktop Frontend | Electron + React 18 | 29 |
-| Styling | TailwindCSS | — |
-| Testing | pytest + pytest-cov | — |
+| Layer | Technology |
+|-------|-----------|
+| **Multi-Agent Framework** | CrewAI |
+| **LLM** | Google Gemini 2.0 Flash |
+| **Backend API** | FastAPI + Uvicorn |
+| **Machine Learning** | Scikit-learn, Prophet, XGBoost |
+| **Memory / Database** | ChromaDB, SQLite |
+| **Data Processing** | Pandas, NumPy |
+| **Desktop / Frontend** | Electron, React 18, TailwindCSS |
 
 ---
 
-## 📜 License
+## Acknowledgements
 
-This project is licensed under the **MIT License** — see [LICENSE](LICENSE) for details.
-
----
-
-## 🙏 Acknowledgements
-
-- [Building Data Genome Project 2](https://github.com/buds-lab/building-data-genome-project-2) — Miller et al., for the open dataset
-- [CrewAI](https://github.com/crewAIInc/crewAI) — Multi-agent framework
-- [Open-Meteo](https://open-meteo.com) — Free weather forecast API
-- Aghili et al. (2025) — Systematic review that informed the research gap analysis
-
----
+- Building Data Genome Project 2 — Miller et al., for the open dataset.
+- CrewAI — Framework for multi-agent logic.
+- Open-Meteo — Open source weather API.
 
 <div align="center">
-Built with ❤️ as a production-grade AI engineering portfolio project
+Built as a production-grade AI engineering portfolio project
 </div>
