@@ -37,8 +37,6 @@ Commercial building HVAC systems consume nearly **40% of total building energy**
 
 ## Previews
 
-*(Replace the placeholder links below with your actual project screenshots or GIFs)*
-
 <p align="center">
   <img src="docs/placeholder-dashboard.png" width="48%" alt="Dashboard Overview">
   <img src="docs/placeholder-report.png" width="48%" alt="Generated PDF Report">
@@ -74,7 +72,7 @@ Commercial building HVAC systems consume nearly **40% of total building energy**
                            [ Open-Meteo API ]
 ```
 
-> See `docs/HVAC Architecture.png` for the full visual architecture diagram.
+![HVAC Architecture Diagram](docs/HVAC%20Architecture.png)
 
 ---
 
