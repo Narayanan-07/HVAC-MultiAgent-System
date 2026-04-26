@@ -41,8 +41,8 @@ Commercial building HVAC systems consume nearly **40% of total building energy**
 ## Previews
 
 <p align="center">
-  <img src="docs/placeholder-dashboard.png" width="48%" alt="Dashboard Overview">
-  <img src="docs/placeholder-report.png" width="48%" alt="Generated PDF Report">
+  <img src="docs/dashboard.png" width="48%" alt="Dashboard Overview">
+  <img src="docs/report.png" width="48%" alt="Generated PDF Report">
 </p>
 
 ---
