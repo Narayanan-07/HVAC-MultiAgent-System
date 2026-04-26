@@ -1,6 +1,19 @@
 import json
 from crewai.tools import tool
 
+def save_task_output(run_id: str, task_name: str, data):
+    """Save task output"""
+    import os
+    import json
+    import logging
+    logger = logging.getLogger(__name__)
+    output_dir = "data/task_outputs"
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, f"{run_id}_{task_name}.json")
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2)
+    logger.info(f"💾 Saved {task_name} to {filepath}")
+
 @tool("Optimize Setpoints")
 def optimize_setpoints(efficiency_scorecard_json: str, ambient_temp_c: float) -> str:
     """
@@ -133,7 +146,7 @@ def plan_load_shifting(peak_windows_json: str) -> str:
     return json.dumps(plans)
 
 @tool("Score Maintenance Priority")
-def score_maintenance_priority(anomaly_report_json: str, degradation_score: float) -> str:
+def score_maintenance_priority(anomaly_report_json: str, degradation_score: float, run_id: str = "unknown") -> str:
     """
     Computes a maintenance priority score and categorizes urgency.
     """
@@ -166,17 +179,19 @@ def score_maintenance_priority(anomaly_report_json: str, degradation_score: floa
         urgency = 30
 
     rationale = f"Priority {level} calculated from {anomaly_count} anomalies over time, combined with {pct_time_above:.1f}% time above expected baseline. The degradation score highlights the urgency factor."
-
-    return json.dumps({
+    result={
         "priority_level": level,
         "priority_score": score,
         "recommended_maintenance_action": action,
         "urgency_days": urgency,
-        "rationale": rationale
-    })
+        "rationale": rationale,
+        "priority": level
+    }
+    save_task_output(run_id, "maintenance", result)
+    return json.dumps(result)
 
 @tool("Compile Final Recommendations")
-def compile_final_recommendations(setpoints_json: str, sequencing_json: str, load_shift_json: str, maintenance_json: str) -> str:
+def compile_final_recommendations(setpoints_json: str, sequencing_json: str, load_shift_json: str, maintenance_json: str,run_id: str = "unknown") -> str:
     """
     Merges and ranks all recommendations into a unified list.
     """
@@ -249,13 +264,16 @@ def compile_final_recommendations(setpoints_json: str, sequencing_json: str, loa
                     "priority_score": maint.get("priority_score", 0)
                 })
 
+
     # Sort descending by priority_score and limit to 10
     all_recs = sorted(all_recs, key=lambda x: float(x.get("priority_score", 0)), reverse=True)[:10]
 
     for rank, rec in enumerate(all_recs, 1):
         rec["rank"] = rank
-
-    return json.dumps({
+    
+    result={
         "total_recommendations": len(all_recs),
         "recommendations": all_recs
-    })
+    }
+    save_task_output(run_id, "recommendations", result)
+    return json.dumps(result)

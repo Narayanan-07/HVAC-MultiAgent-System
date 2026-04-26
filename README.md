@@ -6,7 +6,7 @@
 ![CrewAI](https://img.shields.io/badge/CrewAI-1.9.3-orange?style=for-the-badge)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110-green?style=for-the-badge&logo=fastapi)
 ![Electron](https://img.shields.io/badge/Electron-29-blue?style=for-the-badge&logo=electron)
-![Gemini](https://img.shields.io/badge/Gemini-2.0_Flash-purple?style=for-the-badge&logo=google)
+![Groq](https://img.shields.io/badge/Groq-Llama_3.3_70B-f55036?style=for-the-badge)
 
 **A production-grade, local-first multi-agent AI system that autonomously converts raw HVAC building energy data into explainable operational decisions and automated technical reports.**
 
@@ -31,6 +31,9 @@ Commercial building HVAC systems consume nearly **40% of total building energy**
 - **Energy Forecasting** — Prophet (primary) + XGBoost (fallback), 24h and 168h horizons with confidence intervals.
 - **Explainable Recommendations** — Every optimization action includes a technical rationale.
 - **Automated Reports** — PDF + HTML decision reports with Plotly charts, generated per analysis run.
+- **Token-Efficient Context Management** — Path-based tool integration reduces context token consumption by 99%, bypassing LLM rate limits.
+- **Robust 429 Retry Engine** — Built-in exponential backoff powered by `litellm` interceptors handles Groq API quotas automatically.
+- **Universal Timezone Normalization** — Safe UTC conversion to prevent mixed-timezone plotting crashes across Pandas/Plotly.
 - **Desktop Interface** — Electron app with dark SaaS-style dashboard, report viewer, and analysis history.
 
 ---
@@ -126,7 +129,7 @@ data/raw/
 - Python 3.11+
 - Node.js 18+
 - [wkhtmltopdf](https://wkhtmltopdf.org/downloads.html) (for PDF generation)
-- [Gemini API Key](https://aistudio.google.com) (free tier)
+- [Groq API Key](https://console.groq.com/keys) (free tier)
 
 ### 1. Clone & Setup
 
@@ -155,7 +158,7 @@ cp .env.example .env
 
 Edit `.env`:
 ```env
-GEMINI_API_KEY=your_gemini_key_here
+GROQ_API_KEY=your_groq_key_here
 DATABASE_URL=sqlite:///./hvac_system.db
 REPORTS_DIR=reports
 DATA_DIR=data

@@ -11,6 +11,7 @@ numpy
 scikit-learn
 xgboost
 scipy
+prophet
 matplotlib
 plotly
 kaleido
@@ -19,3 +20,5 @@ weasyprint
 jinja2
 httpx
 python-multipart
+litellm
+langchain-groq

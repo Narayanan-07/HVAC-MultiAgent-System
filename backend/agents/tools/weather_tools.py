@@ -43,13 +43,9 @@ def fetch_weather_forecast(lat: float, lon: float, days: int) -> str:
                 
                 return json.dumps({"hourly": hourly})
                 
-        except (httpx.RequestError, httpx.HTTPStatusError) as e:
+        except Exception as e:
             if attempt < max_retries - 1:
                 time.sleep(2)
             else:
-                # Graceful degradation on failure: instruct to use last known weather
-                return json.dumps({
-                    "error": str(e),
-                    "hourly": [],
-                    "message": "API timeout or failure. Fallback to last known weather from data."
-                })
+                return f"Error fetching weather: {str(e)}"
+    return 'Error fetching weather: Max retries exceeded.'

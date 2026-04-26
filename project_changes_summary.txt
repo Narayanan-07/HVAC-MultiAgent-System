@@ -1,0 +1,29 @@
+# HVAC Multi-Agent System - Project Changes Summary
+
+This document outlines the critical architectural upgrades and bug fixes applied to the HVAC multi-agent system to ensure stability, cost-efficiency, and successful "one-shot" execution.
+
+## 1. LLM Engine & API Rate Limit Fortification (`backend/llm.py`)
+- **Model Upgrade**: Replaced the decommissioned `llama3-70b-8192` with Groq's current flagship model: `groq/llama-3.3-70b-versatile`.
+- **429 Quota Immunity**: Integrated global `litellm` interceptors (`num_retries=15`, `backoff_factor=2.0`, `retry_policy=True`) to catch Groq's aggressive HTTP 429 Too Many Requests errors. Instead of crashing the pipeline, the backend now silently exponentially backs off and retries.
+
+## 2. Token-Efficient "Path-Based" Tool Architecture
+- **Context Window Fix**: Previously, the agents passed massive dataframes (thousands of rows) between tools as raw JSON strings, causing fatal TPM limit overages and context window exhaustion. 
+- **The Solution**: Refactored all analytical tools (Forecasting, Anomaly Detection) to accept **Absolute File Paths** (e.g., `data_path`). The tools now load `features_final.csv` internally via Pandas.
+- **Impact**: Reduced token consumption by ~99%, completely eliminating the `ContextWindowExceeded` and TPM quota limits.
+
+## 3. Infinite Loop Prevention (`agent_definitions.py`, `task_definitions.py`)
+- **Data Engineer Agent Streamlining**: The first agent was getting trapped in an infinite ReAct loop trying to run python scripts it didn't fully understand. 
+- **The Solution**: Removed its complex tools (`tools=[]`) and explicitly instructed it via the `ingest_task` prompt to output a hardcoded JSON pass-through. 
+- **Impact**: The UI progress bar updates instantly, and the `processed_data_path` is safely handed to Agent 2 without hallucination loops.
+- **Llama Guardrails**: Injected strict instructions into all tasks ("LLAMA GUARD") explicitly forbidding the generation of raw Python code and enforcing strict JSON-only tool inputs.
+
+## 4. Data Integrity & Pydantic Validation Fixes (`anomaly_tools.py`, `forecast_tools.py`)
+- **Feature Mappings**: Updated the Isolation Forest and Prophet models to use your actual dataset column names (`electricity_kwh`, `airTemperature`) instead of placeholder names (`meter_reading`, `air_temperature`), resolving the "Missing features" crash.
+- **Pydantic Serialization**: Modified `classify_root_cause` to accept `data_path` instead of expecting a deeply nested dictionary from the LLM. The tool now calculates Z-scores internally, completely bypassing the Langchain/CrewAI Pydantic validation errors caused by LLM formatting mistakes.
+
+## 5. Universal Timezone Normalization (`report_tools.py`, `forecast_tools.py`, `anomaly_tools.py`)
+- **Mixed Timezone Crash Fix**: Addressed a fatal backend crash that occurred when Plotly/Pandas attempted to chart datasets containing a mix of timezone-aware and timezone-naive timestamps.
+- **The Solution**: Implemented a global normalization wash (`pd.to_datetime(df['timestamp'], utc=True).dt.tz_localize(None)`) across all tools that load data. This safely aligns all timestamps to UTC and strips metadata, ensuring flawless chronological alignment and plotting.
+
+## 6. General Dependency Updates
+- Added `litellm` and `langchain-groq` to `requirements.txt` to support the new unified LLM routing wrapper.

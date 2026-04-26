@@ -13,6 +13,8 @@ from typing import Any
 from loguru import logger
 import numpy as np
 import pandas as pd
+import json
+from crewai.tools import tool
 
 
 TARGET_SPACE_USAGE = {"lodging", "office", "retail"}
@@ -259,6 +261,8 @@ def engineer_features(df: pd.DataFrame) -> pd.DataFrame:
 
     try:
         working = df.copy()
+        if not pd.api.types.is_datetime64_any_dtype(working["timestamp"]):
+            working["timestamp"] = pd.to_datetime(working["timestamp"], errors="coerce")
         working = working.sort_values(["building_id", "timestamp"]).reset_index(drop=True)
 
         working["hour_of_day"] = working["timestamp"].dt.hour
@@ -320,8 +324,11 @@ def generate_quality_report(df: pd.DataFrame) -> dict[str, Any]:
         score = max(0.0, 100 - float(df.isnull().mean().mean() * 100))
         flag = "PASS" if score >= 80 else "WARN" if score >= 60 else "FAIL"
 
-        min_ts = df["timestamp"].min()
-        max_ts = df["timestamp"].max()
+        # Ensure timestamps are datetime before calling isoformat()
+        ts_series = pd.to_datetime(df["timestamp"], errors='coerce')
+        min_ts = ts_series.min()
+        max_ts = ts_series.max()
+        
         date_range = {
             "start": min_ts.isoformat() if pd.notna(min_ts) else None,
             "end": max_ts.isoformat() if pd.notna(max_ts) else None,
@@ -341,4 +348,71 @@ def generate_quality_report(df: pd.DataFrame) -> dict[str, Any]:
     except Exception as exc:
         logger.exception("generate_quality_report failed: {}", exc)
         raise RuntimeError(f"Failed to generate quality report: {exc}") from exc
+
+
+@tool("load_and_prepare_hvac_data")
+def load_and_prepare_hvac_data_tool(base_path: str = "data/raw") -> str:
+    """
+    Loads raw HVAC, weather, and metadata CSVs, merges them, and saves a 'merged_raw.csv' file.
+    Returns: JSON summary (metadata) and the absolute file path for subsequent agents.
+    """
+    try:
+        # Check if already exists to skip heavy merge logic if possible
+        out_file = Path("data/processed/merged_raw.csv")
+        if out_file.exists():
+            logger.info("Found existing merged_raw.csv. Skipping re-merge.")
+            return json.dumps({
+                "status": "success",
+                "processed_data_path": str(out_file),
+                "note": "Existing merged data detected."
+            })
+
+        merged_df = load_and_prepare_data(base_path)
+        
+        summary = {
+            "status": "success",
+            "row_count": len(merged_df),
+            "buildings_count": merged_df["building_id"].nunique(),
+            "columns": merged_df.columns.tolist(),
+            "processed_data_path": "data/processed/merged_raw.csv",
+            "note": "Data loaded. Use this path for all subsequent analysis tools."
+        }
+        return json.dumps(summary)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
+
+@tool("engineer_hvac_features")
+def engineer_hvac_features_tool(data_path: str = "data/processed/merged_raw.csv") -> str:
+    """
+    Cleans missing values, derives humidity/WBT/iKW_TR, and engineers temporal features.
+    Saves the final clean dataset to 'data/processed/clean_data.csv'.
+    Returns: JSON quality report and final data path.
+    """
+    try:
+        # Optimization: If final features already exist, return them to save time (5M+ rows)
+        final_path = "data/processed/features_final.csv"
+        if Path(final_path).exists():
+            logger.info("Found existing features_final.csv. Skipping re-engineering.")
+            # Use parse_dates to avoid isoformat errors in quality report
+            sample_df = pd.read_csv(final_path, nrows=100, parse_dates=["timestamp"])
+            report = generate_quality_report(sample_df)
+            report["processed_data_path"] = final_path
+            report["note"] = "Used existing engineered features."
+            return json.dumps(report)
+
+        # Load with explicit date parsing to avoid .dt accessor errors
+        df = pd.read_csv(data_path, parse_dates=["timestamp"])
+        df_clean = handle_missing_values(df)
+        df_enriched = derive_humidity_wbt_ikwtr(df_clean)
+        df_final = engineer_features(df_enriched)
+        
+        final_path = "data/processed/features_final.csv"
+        df_final.to_csv(final_path, index=False)
+        
+        quality_report = generate_quality_report(df_final)
+        quality_report["processed_data_path"] = final_path
+        
+        return json.dumps(quality_report)
+    except Exception as e:
+        return json.dumps({"status": "error", "message": str(e)})
 

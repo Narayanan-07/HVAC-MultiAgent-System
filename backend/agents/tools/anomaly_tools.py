@@ -9,18 +9,29 @@ from crewai.tools import tool
 
 logger = logging.getLogger(__name__)
 
+def save_task_output(run_id: str, task_name: str, data):
+    """Save task output to file for report generation"""
+    import os
+    import json
+    output_dir = "data/task_outputs"
+    os.makedirs(output_dir, exist_ok=True)
+    filepath = os.path.join(output_dir, f"{run_id}_{task_name}.json")
+    with open(filepath, 'w') as f:
+        json.dump(data, f, indent=2)
+    logger.info(f"💾 Saved {task_name} to {filepath}")
+    
 @tool("detect_anomalies_isolation_forest")
-def detect_anomalies_isolation_forest(data_json: str) -> str:
+def detect_anomalies_isolation_forest(data_path: str, run_id: str = "unknown") -> str:
     """
     Detect anomalies in HVAC data using Isolation Forest.
-    Input: JSON string of HVAC data containing ['meter_reading', 'iKW_TR', 'air_temperature', 'relative_humidity'].
-    Returns: JSON string with anomaly_count, anomaly_pct, and anomaly_timestamps.
+    Input: data_path (Path to the clean CSV file).
+    Returns: JSON string with anomaly_count, anomaly_pct, and limited sample timestamps.
     """
     try:
-        data = json.loads(data_json)
-        df = pd.DataFrame(data)
+        df = pd.read_csv(data_path)
         
-        features = ['meter_reading', 'iKW_TR', 'air_temperature', 'relative_humidity']
+        # Use columns present in engineered data
+        features = ['electricity_kwh', 'iKW_TR', 'airTemperature', 'relative_humidity']
         # Check if features exist
         missing = [f for f in features if f not in df.columns]
         if missing:
@@ -40,25 +51,32 @@ def detect_anomalies_isolation_forest(data_json: str) -> str:
         
         anomalies = df_clean[df_clean['anomaly_if'] == 1]
         
+        # Limit timestamps to 10 to save tokens under Groq's small TPM limits
+        timestamps = anomalies['timestamp'].tolist() if 'timestamp' in anomalies.columns else []
+        
         result = {
             "anomaly_count": len(anomalies),
             "anomaly_pct": float(len(anomalies) / len(df_clean) * 100) if len(df_clean) > 0 else 0.0,
-            "anomaly_timestamps": anomalies['timestamp'].tolist() if 'timestamp' in anomalies.columns else []
+            "anomaly_timestamps": timestamps[:10],
+            "note": "Timestamps limited to top 10 to conserve context tokens."
         }
+        
+        save_task_output(run_id, "anomalies", result)
+        
         return json.dumps(result)
     except Exception as e:
         logger.error(f"Error in detect_anomalies_isolation_forest: {e}")
         return json.dumps({"error": str(e)})
 
 @tool("validate_anomalies_zscore")
-def validate_anomalies_zscore(data_json: str, column: str) -> str:
+def validate_anomalies_zscore(data_path: str, column: str) -> str:
     """
     Validate anomalies for a specific column using Z-score.
-    Input: data_json (JSON string of data), column (string name of the column).
-    Returns: JSON string containing a list of flagged rows (|Z| > 3.0) with timestamp, value, and z_score.
+    Input: data_path (CSV path), column (string name of the column).
+    Returns: JSON string containing top 10 flagged rows.
     """
     try:
-        df = pd.DataFrame(json.loads(data_json))
+        df = pd.read_csv(data_path)
         if column not in df.columns:
             return json.dumps({"error": f"Column {column} not found in the data."})
             
@@ -78,35 +96,41 @@ def validate_anomalies_zscore(data_json: str, column: str) -> str:
                 "value": row[column],
                 "z_score": float(row[f'z_score_{column}'])
             })
-        return json.dumps(result)
+        return json.dumps(result[:10])
     except Exception as e:
         logger.error(f"Error in validate_anomalies_zscore: {e}")
         return json.dumps({"error": str(e)})
 
 @tool("classify_root_cause")
-def classify_root_cause(anomaly_data_json: str) -> str:
+def classify_root_cause(data_path: str,run_id: str = "unknown") -> str:
     """
     Classify root cause for anomalies based on specific rules.
-    Input: JSON string of anomaly rows.
+    Input: data_path (CSV path), run_id (run identifier).
     Returns: JSON string with list of {timestamp, root_cause, confidence, description}.
     """
     try:
-        df = pd.DataFrame(json.loads(anomaly_data_json))
+        df = pd.read_csv(data_path)
         if len(df) == 0:
             return json.dumps([])
             
-        if 'temp_z' not in df.columns and 'air_temperature' in df.columns:
-            df['temp_z'] = zscore(df['air_temperature'].fillna(df['air_temperature'].mean()))
-        elif 'temp_z' not in df.columns:
+        # Determine column for temperature
+        temp_col = 'airTemperature' if 'airTemperature' in df.columns else 'air_temperature'
+        if temp_col in df.columns:
+            df['temp_z'] = zscore(df[temp_col].fillna(df[temp_col].mean()))
+        else:
             df['temp_z'] = 0.0
 
-        if 'ikwtr_z' not in df.columns and 'iKW_TR' in df.columns:
+        if 'iKW_TR' in df.columns:
             df['ikwtr_z'] = zscore(df['iKW_TR'].fillna(df['iKW_TR'].mean()))
-        elif 'ikwtr_z' not in df.columns:
+        else:
             df['ikwtr_z'] = 0.0
             
+        # Select top 20 most extreme data points based on z-scores to classify
+        df['anomaly_score'] = df['temp_z'].abs() + df['ikwtr_z'].abs()
+        anomalies = df.sort_values(by='anomaly_score', ascending=False).head(20)
+            
         results = []
-        for _, row in df.iterrows():
+        for _, row in anomalies.iterrows():
             timestamp = row.get('timestamp', 'Unknown')
             ikwtr = row.get('iKW_TR', 0)
             temp_z = row.get('temp_z', 0)
@@ -118,7 +142,8 @@ def classify_root_cause(anomaly_data_json: str) -> str:
             if hour is None or is_weekend is None:
                 if timestamp != 'Unknown':
                     try:
-                        dt = pd.to_datetime(timestamp)
+                        # Safely remove tz info if present to allow .hour extraction safely
+                        dt = pd.to_datetime(timestamp, utc=True).tz_localize(None)
                         hour = dt.hour
                         is_weekend = 1 if dt.weekday() >= 5 else 0
                     except:
@@ -133,6 +158,9 @@ def classify_root_cause(anomaly_data_json: str) -> str:
             confidence = 0.5
             description = "Anomaly detected but root cause could not be confidently determined."
             
+            # ====================================================================
+            # EXISTING LOGIC - KEPT INTACT
+            # ====================================================================
             if ikwtr > 0.85:
                 root_cause = "EQUIPMENT-DRIVEN"
                 confidence = 0.9
@@ -145,32 +173,105 @@ def classify_root_cause(anomaly_data_json: str) -> str:
                 root_cause = "BEHAVIORAL"
                 confidence = 0.75
                 description = "High load during standard operating hours suggests occupancy or behavioral demand spikes."
-                
+            
+            # ====================================================================
+            # ADDED: 3 fields needed by template + severity logic
+            # ====================================================================
+            # Determine severity based on iKW-TR value and z-scores
+            if ikwtr > 1.2 or abs(temp_z) > 3 or abs(ikwtr_z) > 3:
+                severity = "HIGH"
+            elif ikwtr > 0.9 or abs(temp_z) > 2 or abs(ikwtr_z) > 2:
+                severity = "MEDIUM"
+            else:
+                severity = "LOW"
+            
+            # Determine primary parameter
+            if ikwtr > 0.85:
+                parameter = "iKW_TR"
+            elif abs(temp_z) > abs(ikwtr_z):
+                parameter = "Temperature"
+            else:
+                parameter = "Multiple"
+            
             results.append({
-                "timestamp": timestamp,
+                "timestamp": str(timestamp),  # Ensure string format
+                "parameter": parameter,  # ← ADDED (required by template)
+                "severity": severity,    # ← ADDED (required by template)
                 "root_cause": root_cause,
                 "confidence": confidence,
                 "description": description
             })
-            
+        
+        # ====================================================================
+        # ADDED: Save to file so reporter can load it
+        # ====================================================================
+        save_task_output(run_id, "anomalies", results)
+        
+        logger.info(f"✓ Classified {len(results)} anomalies with root causes")
         return json.dumps(results)
+        
     except Exception as e:
         logger.error(f"Error in classify_root_cause: {e}")
         return json.dumps({"error": str(e)})
 
-@tool("score_degradation_trend")
-def score_degradation_trend(data_json: str) -> str:
+@tool("generate_data_quality_report")
+def generate_data_quality_report(data_path: str) -> str:
     """
-    Score the degradation trend of the HVAC system over 7-day and 30-day windows.
-    Input: JSON string of HVAC data containing timestamp and iKW_TR.
-    Returns: JSON string with trend_status, degradation_score, 7d_mean_ikwtr, 30d_mean_ikwtr, benchmark.
+    Generate data quality scorecard for all columns.
     """
     try:
-        df = pd.DataFrame(json.loads(data_json))
+        df = pd.read_csv(data_path)
+        total_rows = len(df)
+        
+        quality_report = []
+        
+        # Check key columns
+        for col in ['timestamp', 'electricity_kwh', 'iKW_TR', 'airTemperature', 'relative_humidity']:
+            if col not in df.columns:
+                continue
+            
+            missing = df[col].isna().sum()
+            completeness = ((total_rows - missing) / total_rows * 100) if total_rows > 0 else 0
+            
+            if completeness >= 95:
+                flag = "EXCELLENT"
+            elif completeness >= 80:
+                flag = "GOOD"
+            elif completeness >= 60:
+                flag = "FAIR"
+            else:
+                flag = "POOR"
+            
+            quality_report.append({
+                "column": col,
+                "completeness": round(completeness, 1),
+                "quality_flag": flag
+            })
+        
+        # Save
+        save_task_output("data_quality", quality_report)
+        
+        logger.info(f"Generated data quality report with {len(quality_report)} columns")
+        return json.dumps(quality_report)
+        
+    except Exception as e:
+        logger.error(f"Data quality error: {e}")
+        return json.dumps({"error": str(e)})
+
+@tool("score_degradation_trend")
+def score_degradation_trend(data_path: str) -> str:
+    """
+    Score the degradation trend of the HVAC system over 7-day and 30-day windows.
+    Input: data_path (CSV path).
+    Returns: JSON summary of iKW-TR trends.
+    """
+    try:
+        df = pd.read_csv(data_path)
         if 'iKW_TR' not in df.columns or 'timestamp' not in df.columns:
             return json.dumps({"error": "Missing iKW_TR or timestamp."})
             
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        # Convert to UTC and strip timezone
+        df['timestamp'] = pd.to_datetime(df['timestamp'], utc=True).dt.tz_localize(None)
         df = df.sort_values('timestamp').dropna(subset=['iKW_TR'])
         if len(df) == 0:
             return json.dumps({"error": "No valid iKW_TR data."})
@@ -204,15 +305,60 @@ def score_degradation_trend(data_json: str) -> str:
         logger.error(f"Error in score_degradation_trend: {e}")
         return json.dumps({"error": str(e)})
 
-@tool("generate_efficiency_scorecard")
-def generate_efficiency_scorecard(data_json: str) -> str:
+@tool("generate_data_quality_report")
+def generate_data_quality_report(data_path: str, run_id: str = "unknown") -> str:  # ← ADD run_id parameter
     """
-    Generate an efficiency scorecard based on iKW_TR values.
-    Input: JSON string of HVAC data containing iKW_TR.
-    Returns: JSON string with avg_ikwtr, min_ikwtr, max_ikwtr, pct_time_above_benchmark, and efficiency_grade.
+    Generate data quality scorecard for key columns and save to a run-specific file.
+    Input: data_path (CSV path), run_id (the current run identifier).
+    Returns: JSON list with column completeness.
     """
     try:
-        df = pd.DataFrame(json.loads(data_json))
+        df = pd.read_csv(data_path)
+        total_rows = len(df)
+        
+        quality_report = []
+        
+        # Check key columns only
+        key_columns = ['timestamp', 'electricity_kwh', 'iKW_TR', 'airTemperature', 'relative_humidity']
+        
+        for col in key_columns:
+            if col not in df.columns:
+                continue
+            
+            missing = df[col].isna().sum()
+            completeness = ((total_rows - missing) / total_rows * 100) if total_rows > 0 else 0
+            
+            # Assign quality flag
+            if completeness >= 95:
+                flag = "EXCELLENT"
+            elif completeness >= 80:
+                flag = "GOOD"
+            elif completeness >= 60:
+                flag = "FAIR"
+            else:
+                flag = "POOR"
+            
+            quality_report.append({
+                "column": col,
+                "completeness": round(completeness, 1),
+                "quality_flag": flag
+            })
+        
+        # Save to file using the provided run_id
+        save_task_output(run_id, "data_quality", quality_report)  # ← FIX: Pass run_id here
+        
+        logger.info(f"✓ Generated data quality report for {len(quality_report)} columns for run {run_id}")
+        return json.dumps(quality_report)
+        
+    except Exception as e:
+        logger.error(f"Data quality report error: {e}")
+        return json.dumps({"error": str(e)})
+
+@tool("generate_efficiency_scorecard")
+def generate_efficiency_scorecard(data_path: str, run_id: str = "unknown") -> str:  # ADD run_id parameter
+    """Generate efficiency scorecard and SAVE to file"""
+    try:
+        df = pd.read_csv(data_path)
         if 'iKW_TR' not in df.columns:
             return json.dumps({"error": "Missing iKW_TR column."})
             
@@ -245,6 +391,10 @@ def generate_efficiency_scorecard(data_json: str) -> str:
             "pct_time_above_benchmark": round(pct_above, 2),
             "efficiency_grade": grade
         }
+        
+        # SAVE TO FILE
+        save_task_output(run_id, "efficiency", result)
+        
         return json.dumps(result)
     except Exception as e:
         logger.error(f"Error in generate_efficiency_scorecard: {e}")

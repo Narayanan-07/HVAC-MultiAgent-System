@@ -10,6 +10,7 @@ def get_chroma_client():
         _chroma_client = chromadb.Client()
     return _chroma_client
 
+
 @tool("Store Recommendations In Memory")
 def store_recommendations_in_memory(recommendations_json: str, run_id: str) -> str:
     """

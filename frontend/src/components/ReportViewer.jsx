@@ -50,7 +50,15 @@ const ReportViewer = ({ runId }) => {
     if (reportData && reportData.html_content) {
       const blob = new Blob([reportData.html_content], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
-      window.open(url, '_blank');
+      const link = document.createElement('a');
+      link.href = url;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   };
 

@@ -14,12 +14,15 @@ const StatCard = ({ title, value, icon: Icon, colorClass }) => (
   </div>
 );
 
-const FileUpload = ({ label }) => (
-  <div className="border-2 border-dashed border-slate-600 bg-slate-900/50 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-blue-500 hover:bg-slate-900 transition-colors cursor-pointer group">
+const FileUpload = ({ label, onChange, fileName }) => (
+  <label className="border-2 border-dashed border-slate-600 bg-slate-900/50 rounded-xl p-6 flex flex-col items-center justify-center text-center hover:border-blue-500 hover:bg-slate-900 transition-colors cursor-pointer group">
+    <input type="file" accept=".csv" onChange={onChange} className="hidden" />
     <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-blue-500 mb-2 transition-colors" />
     <p className="text-sm font-medium text-slate-300">{label}</p>
-    <p className="text-xs text-slate-500 mt-1">Drag & drop or click</p>
-  </div>
+    <p className="text-xs text-slate-500 mt-1">
+      {fileName ? fileName : 'Drag & drop or click'}
+    </p>
+  </label>
 );
 
 const PipelineStep = ({ title, desc, status, isLast }) => {
@@ -60,7 +63,33 @@ const Dashboard = ({ setActiveTab, setGlobalRunId }) => {
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
 
+  const [energyFile, setEnergyFile] = useState(null);
+  const [weatherFile, setWeatherFile] = useState(null);
+  const [metaFile, setMetaFile] = useState(null);
+
+  const [stats, setStats] = useState({
+    buildingsAnalyzed: 0,
+    successRate: 0,
+    reportsGenerated: 0,
+  });
+
   const currentDate = new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await axios.get('http://localhost:8000/api/v1/pipeline/stats');
+        setStats({
+          buildingsAnalyzed: response.data.buildings_analyzed,
+          successRate: response.data.success_rate,
+          reportsGenerated: response.data.reports_generated,
+        });
+      } catch (err) {
+        console.error('Error fetching dashboard stats:', err);
+      }
+    };
+    fetchStats();
+  }, [status]);
 
   const handleRunAnalysis = async () => {
     try {
@@ -147,10 +176,10 @@ const Dashboard = ({ setActiveTab, setGlobalRunId }) => {
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <StatCard title="Buildings Analyzed" value="12" icon={Building} colorClass="bg-blue-500" />
-        <StatCard title="Last Run Status" value={status === 'RUNNING' ? 'Running' : 'Success'} icon={Activity} colorClass="bg-green-500" />
-        <StatCard title="Data Quality Score" value="94%" icon={ShieldCheck} colorClass="bg-indigo-500" />
-        <StatCard title="Reports Generated" value="128" icon={FileText} colorClass="bg-purple-500" />
+        <StatCard title="Buildings Analyzed" value={stats.buildingsAnalyzed.toString()} icon={Building} colorClass="bg-blue-500" />
+        <StatCard title="Last Run Status" value={status === 'RUNNING' ? 'Running' : (status === 'QUEUED' ? 'Queued' : status)} icon={Activity} colorClass="bg-green-500" />
+        <StatCard title="Success Rate" value={`${stats.successRate}%`} icon={ShieldCheck} colorClass="bg-indigo-500" />
+        <StatCard title="Reports Generated" value={stats.reportsGenerated.toString()} icon={FileText} colorClass="bg-purple-500" />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
@@ -159,9 +188,9 @@ const Dashboard = ({ setActiveTab, setGlobalRunId }) => {
           <h2 className="text-xl font-semibold text-slate-100 mb-6">Configure Analysis</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            <FileUpload label="Historical Data (CSV)" />
-            <FileUpload label="Weather Forecast" />
-            <FileUpload label="Building Meta (JSON)" />
+            <FileUpload label="Historical Data (CSV)" onChange={(e) => setEnergyFile(e.target.files[0])} fileName={energyFile?.name} />
+            <FileUpload label="Weather Forecast (CSV)" onChange={(e) => setWeatherFile(e.target.files[0])} fileName={weatherFile?.name} />
+            <FileUpload label="Building Metadata (CSV)" onChange={(e) => setMetaFile(e.target.files[0])} fileName={metaFile?.name} />
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
