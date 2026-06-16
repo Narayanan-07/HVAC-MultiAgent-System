@@ -14,11 +14,12 @@ class Settings(BaseSettings):
     Settings loaded from environment variables and a local `.env` file.
 
     Notes:
-    - `GEMINI_API_KEY` is optional by default so the API can start and serve
-      endpoints like `/health` without requiring external API credentials.
+    - API keys default to empty string so the server can start for health checks,
+      but a startup warning is emitted if both LLM keys are absent.
     """
 
-    GEMINI_API_KEY: str = "AIzaSyB3eYHP6r5vDcWba_4reFtpZbz_gOaeUvA"
+    GROQ_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
     DATABASE_URL: str = "sqlite:///./hvac_system.db"
     REPORTS_DIR: str = "reports"
     DATA_DIR: str = "data"

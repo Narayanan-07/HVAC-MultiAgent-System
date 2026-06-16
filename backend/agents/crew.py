@@ -36,7 +36,10 @@ def build_hvac_crew(task_callback=None) -> Crew:
         verbose=True,
         memory=False,
         task_callback=task_callback,
-        max_rpm=12,  # Global crew-level rate limit
+        # Spread requests so cumulative tokens/minute stay under Groq's free
+        # 12K TPM ceiling. ~8 req/min of small payloads keeps us under the cap;
+        # a deterministic fallback in pipeline.py covers any 429s that slip past.
+        max_rpm=8,
     )
 
 

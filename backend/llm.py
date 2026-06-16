@@ -113,8 +113,6 @@ rate_limiter = RateLimiter(requests_per_minute=12)  # Conservative: 12 RPM for s
 # ============================================================================
 def get_groq_llm() -> LLM:
     """Get Groq LLM with current rotated API key"""
-    rate_limiter.wait_if_needed()
-    
     return LLM(
         model="groq/llama-3.3-70b-versatile",
         temperature=0.0,
@@ -128,8 +126,6 @@ def get_groq_llm() -> LLM:
 # ============================================================================
 def get_gemini_llm() -> LLM:
     """Fallback to Gemini if Groq fails"""
-    rate_limiter.wait_if_needed()
-    
     return LLM(
         model="gemini/gemini-2.5-flash",
         temperature=0.0,

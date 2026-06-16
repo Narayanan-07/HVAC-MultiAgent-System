@@ -120,10 +120,12 @@ async def run_pipeline_endpoint(
         inputs["run_id"] = run_id  # ENSURE agents have access to the Run ID
         inputs["metadata_path"] = "data/raw/metadata.csv"
         
-        # CHANGED: Map React's 'latitude'/'longitude' back to 'lat'/'lon' for CrewAI
-        inputs["lat"] = inputs.pop("latitude", 40.7128) or 40.7128
-        inputs["lon"] = inputs.pop("longitude", -74.0060) or -74.0060
-        
+        # Pass user coordinates through as-is (may be None). run_pipeline()
+        # resolves the final coordinates: user value → building's own lat/lng
+        # (looked up from the dataset) → default. A layman just picks a building.
+        inputs["lat"] = inputs.pop("latitude", None)
+        inputs["lon"] = inputs.pop("longitude", None)
+
         # CHANGED: Provide the missing data Agent 4 is begging for
         inputs["load_pct"] = 75.0
         inputs["num_chillers"] = 3
@@ -199,7 +201,7 @@ async def get_pipeline_stats(db: Session = Depends(get_db_session)) -> PipelineS
         total_stmt = select(func.count(PipelineRun.run_id))
         total_count = db.execute(total_stmt).scalar() or 0
 
-        success_stmt = select(func.count(PipelineRun.run_id)).where(PipelineRun.status == "completed")
+        success_stmt = select(func.count(PipelineRun.run_id)).where(PipelineRun.status == "COMPLETED")
         success_count = db.execute(success_stmt).scalar() or 0
 
         success_rate = 0

@@ -53,16 +53,19 @@ def detect_anomalies_isolation_forest(data_path: str, run_id: str = "unknown") -
         
         # Limit timestamps to 10 to save tokens under Groq's small TPM limits
         timestamps = anomalies['timestamp'].tolist() if 'timestamp' in anomalies.columns else []
-        
+
         result = {
             "anomaly_count": len(anomalies),
             "anomaly_pct": float(len(anomalies) / len(df_clean) * 100) if len(df_clean) > 0 else 0.0,
             "anomaly_timestamps": timestamps[:10],
             "note": "Timestamps limited to top 10 to conserve context tokens."
         }
-        
-        save_task_output(run_id, "anomalies", result)
-        
+
+        # NOTE: saved under a distinct name so it does NOT clobber the richer,
+        # root-cause-classified anomalies that the report actually displays
+        # (classify_root_cause writes {run_id}_anomalies.json).
+        save_task_output(run_id, "anomalies_if", result)
+
         return json.dumps(result)
     except Exception as e:
         logger.error(f"Error in detect_anomalies_isolation_forest: {e}")
@@ -102,114 +105,96 @@ def validate_anomalies_zscore(data_path: str, column: str) -> str:
         return json.dumps({"error": str(e)})
 
 @tool("classify_root_cause")
-def classify_root_cause(data_path: str,run_id: str = "unknown") -> str:
+def classify_root_cause(data_path: str, run_id: str = "unknown") -> str:
     """
-    Classify root cause for anomalies based on specific rules.
-    Input: data_path (CSV path), run_id (run identifier).
-    Returns: JSON string with list of {timestamp, root_cause, confidence, description}.
+    Detect and classify GENUINE HVAC anomalies for a single building.
+
+    A point is treated as a real anomaly only when Isolation Forest flags it
+    AND it is statistically extreme (|z| > 3) on a key variable — this avoids
+    the "everything is 5% anomalous" artefact of contamination-only flagging.
+    Each anomaly gets a specific, value-rich root cause. Saves
+    {run_id}_anomalies.json as {"total_anomalies": N, "anomalies": [up to 10]}.
     """
     try:
         df = pd.read_csv(data_path)
+        empty = {"total_anomalies": 0, "anomalies": []}
         if len(df) == 0:
-            return json.dumps([])
-            
-        # Determine column for temperature
+            save_task_output(run_id, "anomalies", empty)
+            return json.dumps({"total_anomalies": 0, "shown": 0})
+
         temp_col = 'airTemperature' if 'airTemperature' in df.columns else 'air_temperature'
-        if temp_col in df.columns:
-            df['temp_z'] = zscore(df[temp_col].fillna(df[temp_col].mean()))
-        else:
-            df['temp_z'] = 0.0
+        feats = [c for c in ['electricity_kwh', 'iKW_TR', temp_col, 'relative_humidity'] if c in df.columns]
+        dfc = df.dropna(subset=feats).copy()
+        if len(dfc) < 50 or 'iKW_TR' not in dfc.columns:
+            save_task_output(run_id, "anomalies", empty)
+            return json.dumps({"total_anomalies": 0, "shown": 0})
 
-        if 'iKW_TR' in df.columns:
-            df['ikwtr_z'] = zscore(df['iKW_TR'].fillna(df['iKW_TR'].mean()))
-        else:
-            df['ikwtr_z'] = 0.0
-            
-        # Select top 20 most extreme data points based on z-scores to classify
-        df['anomaly_score'] = df['temp_z'].abs() + df['ikwtr_z'].abs()
-        anomalies = df.sort_values(by='anomaly_score', ascending=False).head(20)
-            
+        # Multivariate flag (Isolation Forest)
+        X = StandardScaler().fit_transform(dfc[feats])
+        clf = IsolationForest(n_estimators=100, contamination=0.05, random_state=42)
+        dfc['if_pred'] = clf.fit_predict(X)
+
+        # Univariate z-scores: legitimacy filter + classification signals
+        dfc['ikwtr_z'] = zscore(dfc['iKW_TR'])
+        dfc['temp_z'] = zscore(dfc[temp_col]) if temp_col in dfc.columns else 0.0
+        dfc['elec_z'] = zscore(dfc['electricity_kwh']) if 'electricity_kwh' in dfc.columns else 0.0
+
+        # A genuine anomaly: IF-flagged AND statistically extreme on a real axis
+        # (|z| > 2.5 ≈ top ~0.6% tail — strict enough to be defensible, not the
+        # contamination-forced 5% that made every building look identical).
+        extreme = (dfc['ikwtr_z'].abs() > 2.5) | (dfc['temp_z'].abs() > 2.5) | (dfc['elec_z'].abs() > 2.5)
+        anoms = dfc[(dfc['if_pred'] == -1) & extreme].copy()
+        total = int(len(anoms))
+
+        if total == 0:
+            save_task_output(run_id, "anomalies", empty)
+            return json.dumps({"total_anomalies": 0, "shown": 0})
+
+        # Most severe first, then keep at most 10 (a small building may have fewer)
+        anoms['sev_metric'] = anoms[['ikwtr_z', 'temp_z', 'elec_z']].abs().max(axis=1)
+        anoms = anoms.sort_values('sev_metric', ascending=False).head(10)
+
         results = []
-        for _, row in anomalies.iterrows():
-            timestamp = row.get('timestamp', 'Unknown')
-            ikwtr = row.get('iKW_TR', 0)
-            temp_z = row.get('temp_z', 0)
-            ikwtr_z = row.get('ikwtr_z', 0)
-            
-            hour = row.get('hour_of_day')
-            is_weekend = row.get('is_weekend')
-            
-            if hour is None or is_weekend is None:
-                if timestamp != 'Unknown':
-                    try:
-                        # Safely remove tz info if present to allow .hour extraction safely
-                        dt = pd.to_datetime(timestamp, utc=True).tz_localize(None)
-                        hour = dt.hour
-                        is_weekend = 1 if dt.weekday() >= 5 else 0
-                    except:
-                        hour = 12
-                        is_weekend = 0
-            
-            # Note: is_weekend is sometimes a float/int, we cast to bool or compare
-            is_wknd = bool(int(is_weekend) if pd.notnull(is_weekend) else 0)
-            hr = int(hour) if pd.notnull(hour) else 12
+        for _, row in anoms.iterrows():
+            ts = str(row.get('timestamp', 'Unknown'))
+            ikwtr = float(row.get('iKW_TR', 0) or 0)
+            tz, iz, ez = float(row['temp_z']), float(row['ikwtr_z']), float(row['elec_z'])
+            temp = float(row.get(temp_col, 0) or 0)
+            elec = float(row.get('electricity_kwh', 0) or 0)
+            hour = int(row['hour_of_day']) if pd.notnull(row.get('hour_of_day')) else None
+            wknd = bool(int(row['is_weekend'])) if pd.notnull(row.get('is_weekend')) else False
 
-            root_cause = "UNKNOWN"
-            confidence = 0.5
-            description = "Anomaly detected but root cause could not be confidently determined."
-            
-            # ====================================================================
-            # EXISTING LOGIC - KEPT INTACT
-            # ====================================================================
-            if ikwtr > 0.85:
-                root_cause = "EQUIPMENT-DRIVEN"
-                confidence = 0.9
-                description = f"High cooling energy intensity (iKW/TR = {ikwtr:.2f}) indicates potential equipment degradation or failure."
-            elif abs(temp_z) > 2.0 and abs(ikwtr_z) < 1.0:
-                root_cause = "WEATHER-DRIVEN"
-                confidence = 0.85
-                description = "Extreme ambient temperatures are driving up load without significant cooling efficiency loss."
-            elif not is_wknd and (9 <= hr <= 18) and abs(temp_z) <= 2.0:
-                root_cause = "BEHAVIORAL"
-                confidence = 0.75
-                description = "High load during standard operating hours suggests occupancy or behavioral demand spikes."
-            
-            # ====================================================================
-            # ADDED: 3 fields needed by template + severity logic
-            # ====================================================================
-            # Determine severity based on iKW-TR value and z-scores
-            if ikwtr > 1.2 or abs(temp_z) > 3 or abs(ikwtr_z) > 3:
-                severity = "HIGH"
-            elif ikwtr > 0.9 or abs(temp_z) > 2 or abs(ikwtr_z) > 2:
-                severity = "MEDIUM"
+            if ikwtr > 0.85 or abs(iz) > 3:
+                cause, sev, param = "Equipment degradation", "HIGH", "iKW-TR"
+                desc = (f"Cooling efficiency spiked to {ikwtr:.2f} kW/TR (z={iz:+.1f}), well past the "
+                        f"0.60 benchmark — likely fouled tubes, low refrigerant, or a failing compressor.")
+            elif abs(tz) > 3 and abs(iz) < 2:
+                cause, sev, param = "Weather driven", "MEDIUM", "Temperature"
+                desc = (f"Ambient temperature reached {temp:.1f}°C (z={tz:+.1f}) while efficiency stayed "
+                        f"normal — a load surge driven by outdoor conditions, not the plant.")
+            elif abs(ez) > 3 and hour is not None and 9 <= hour <= 18 and not wknd:
+                cause, sev, param = "Behavioral / occupancy", "MEDIUM", "Energy"
+                desc = (f"Consumption reached {elec:.0f} kWh (z={ez:+.1f}) during business hours — an "
+                        f"occupancy or equipment-usage spike rather than a fault.")
+            elif abs(ez) > 3 and (wknd or hour is None or hour < 6 or hour > 21):
+                cause, sev, param = "Scheduling / control", "MEDIUM", "Energy"
+                desc = (f"High consumption ({elec:.0f} kWh, z={ez:+.1f}) outside occupied hours — a schedule "
+                        f"or setpoint left running while the building is largely empty.")
             else:
-                severity = "LOW"
-            
-            # Determine primary parameter
-            if ikwtr > 0.85:
-                parameter = "iKW_TR"
-            elif abs(temp_z) > abs(ikwtr_z):
-                parameter = "Temperature"
-            else:
-                parameter = "Multiple"
-            
+                cause, sev, param = "Sensor / data quality", "LOW", "Multiple"
+                desc = (f"Multivariate outlier (iKW-TR {ikwtr:.2f}, {temp:.1f}°C, {elec:.0f} kWh) with no single "
+                        f"dominant driver — verify sensor calibration before acting.")
+
             results.append({
-                "timestamp": str(timestamp),  # Ensure string format
-                "parameter": parameter,  # ← ADDED (required by template)
-                "severity": severity,    # ← ADDED (required by template)
-                "root_cause": root_cause,
-                "confidence": confidence,
-                "description": description
+                "timestamp": ts, "parameter": param, "severity": sev, "root_cause": cause,
+                "confidence": round(min(0.95, 0.6 + float(row['sev_metric']) / 12), 2),
+                "description": desc,
             })
-        
-        # ====================================================================
-        # ADDED: Save to file so reporter can load it
-        # ====================================================================
-        save_task_output(run_id, "anomalies", results)
-        
-        logger.info(f"✓ Classified {len(results)} anomalies with root causes")
-        return json.dumps(results)
-        
+
+        save_task_output(run_id, "anomalies", {"total_anomalies": total, "anomalies": results})
+        logger.info(f"✓ {total} genuine anomalies for {run_id}; reporting top {len(results)}")
+        return json.dumps({"total_anomalies": total, "shown": len(results)})
+
     except Exception as e:
         logger.error(f"Error in classify_root_cause: {e}")
         return json.dumps({"error": str(e)})

@@ -1,156 +1,464 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>HVAC Optimization Decision Report</title>
-    <style>
-        body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 40px; }
-        h1, h2, h3 { color: #2c3e50; }
-        .header { text-align: center; border-bottom: 2px solid #3498db; padding-bottom: 20px; margin-bottom: 30px; }
-        .executive-summary { background: #f9f9f9; padding: 20px; border-left: 5px solid #3498db; margin-bottom: 30px; }
-        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .dashboard { display: flex; justify-content: space-between; align-items: center; background: #ecf0f1; padding: 20px; border-radius: 8px; margin-bottom: 30px; text-align: center; }
-        .dashboard-item { flex: 1; }
-        .dashboard-number { font-size: 3em; font-weight: bold; color: #2980b9; }
-        .badge { display: inline-block; padding: 5px 10px; border-radius: 12px; font-weight: bold; color: white; font-size: 0.9em; }
-        .badge.A { background-color: #27ae60; }
-        .badge.B { background-color: #2ecc71; }
-        .badge.C { background-color: #f1c40f; color: #333; }
-        .badge.D { background-color: #e67e22; }
-        .badge.F { background-color: #e74c3c; }
-        .badge.CRITICAL { background-color: #c0392b; }
-        .badge.HIGH { background-color: #e67e22; }
-        .badge.MEDIUM { background-color: #f39c12; }
-        .badge.LOW { background-color: #27ae60; }
-        .card { border: 1px solid #ddd; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .chart-container { text-align: center; margin-bottom: 40px; }
-        .chart-container img { max-width: 100%; height: auto; border: 1px solid #ddd; padding: 10px; background: white; }
-        .trend-up { color: #e74c3c; font-weight: bold; }
-        .trend-down { color: #27ae60; font-weight: bold; }
-        .page-break { page-break-before: always; }
-    </style>
+  <meta charset="UTF-8" />
+  <title>HVAC Optimization Report — {{ building_id }}</title>
+  <style>
+    /* ─────────────────────────────────────────────────────────────
+       Professional light report · Aptos typography · grey/white scheme
+       ───────────────────────────────────────────────────────────── */
+    :root {
+      --ink:        #111111;   /* primary text (black)     */
+      --ink-soft:   #333333;   /* secondary text           */
+      --muted:      #666666;   /* labels / captions        */
+      --line:       #dddddd;   /* hairline borders         */
+      --line-soft:  #f0f0f0;   /* zebra / subtle fills     */
+      --surface:    #f6f6f6;   /* card / table-head fill   */
+      --accent:     #111111;   /* black structure / headers */
+      --accent-bar: #111111;   /* black section markers    */
+      --ok:         #1b7a3d;   /* green (good / improving) */
+      --ok-bg:      #e8f5ec;
+      --warn:       #555555;   /* neutral grey (mid)       */
+      --warn-bg:    #efefef;
+      --bad:        #c0392b;   /* red (critical / bad)     */
+      --bad-bg:     #fbe9e9;
+      --info-bg:    #f0f0f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+
+    body {
+      font-family: 'Aptos', 'Aptos Display', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .page { max-width: 920px; margin: 0 auto; padding: 0 48px 56px; }
+
+    .page-break { page-break-before: always; }
+
+    /* ── Masthead ─────────────────────────────────────────────── */
+    .masthead {
+      border-bottom: 2px solid var(--accent);
+      padding: 40px 48px 24px;
+      max-width: 920px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+    }
+    .masthead .eyebrow {
+      font-size: 11px;
+      letter-spacing: 2.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+    .masthead h1 {
+      font-size: 25px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.3px;
+    }
+    .masthead .meta {
+      text-align: right;
+      font-size: 12px;
+      color: var(--ink-soft);
+    }
+    .masthead .meta .b { font-weight: 600; color: var(--ink); }
+
+    /* ── Section headers ──────────────────────────────────────── */
+    .section {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      margin: 38px 0 16px;
+    }
+    .section .num {
+      font-size: 11px;
+      font-weight: 700;
+      color: #ffffff;
+      background: var(--accent-bar);
+      border-radius: 4px;
+      padding: 2px 7px;
+      letter-spacing: 0.5px;
+    }
+    .section h2 {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: -0.2px;
+    }
+
+    /* ── Executive summary ────────────────────────────────────── */
+    .summary {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      padding: 18px 22px;
+      color: var(--ink-soft);
+      font-size: 13.5px;
+    }
+
+    /* ── KPI strip ────────────────────────────────────────────── */
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+    .kpi {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px 20px;
+      background: #ffffff;
+    }
+    .kpi .label {
+      font-size: 10.5px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .kpi .value {
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1;
+    }
+    .kpi .sub { font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+    /* ── Tables ───────────────────────────────────────────────── */
+    table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    thead th {
+      background: var(--surface);
+      color: var(--ink-soft);
+      text-align: left;
+      font-size: 10.5px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 10px 14px;
+      border-bottom: 1.5px solid var(--line);
+    }
+    tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      color: var(--ink-soft);
+      vertical-align: middle;
+    }
+    tbody tr:nth-child(even) { background: #fbfcfd; }
+
+    .mono { font-family: 'Cascadia Mono', 'Consolas', monospace; font-size: 11.5px; color: var(--ink); }
+
+    /* progress meter inside table */
+    .meter { display: flex; align-items: center; gap: 9px; }
+    .meter .track { flex: 1; height: 5px; background: var(--line); border-radius: 3px; overflow: hidden; }
+    .meter .fill  { height: 100%; border-radius: 3px; }
+
+    /* ── Badges (muted, professional) ─────────────────────────── */
+    .badge {
+      display: inline-block;
+      padding: 2px 9px;
+      border-radius: 4px;
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .badge.good, .badge.A, .badge.B, .badge.LOW, .badge.EXCELLENT, .badge.GOOD, .badge.PASS
+      { background: var(--ok-bg);   color: var(--ok);   }
+    .badge.warn, .badge.C, .badge.D, .badge.MEDIUM, .badge.FAIR, .badge.WARNING
+      { background: var(--warn-bg); color: var(--warn); }
+    .badge.bad, .badge.F, .badge.CRITICAL, .badge.HIGH, .badge.POOR
+      { background: var(--bad-bg);  color: var(--bad);  }
+
+    /* ── Recommendation cards ─────────────────────────────────── */
+    .rec {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px 20px;
+      margin-bottom: 12px;
+      background: #ffffff;
+    }
+    .rec .head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .rec .tag {
+      font-size: 10px;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin-bottom: 3px;
+    }
+    .rec .title { font-size: 14px; font-weight: 600; color: var(--ink); }
+    .rec p { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; }
+    .rec p .b { color: var(--ink); font-weight: 600; }
+    .rec.CRITICAL { border-left: 3px solid var(--bad);  }
+    .rec.HIGH     { border-left: 3px solid var(--bad);  }
+    .rec.MEDIUM   { border-left: 3px solid var(--accent-bar); }
+    .rec.LOW      { border-left: 3px solid var(--ok);   }
+
+    /* ── Charts ───────────────────────────────────────────────── */
+    .chart {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 16px;
+      background: #ffffff;
+    }
+    .chart h3 {
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--ink-soft);
+      margin-bottom: 12px;
+    }
+    .chart img { width: 100%; height: auto; border-radius: 4px; display: block; }
+    .placeholder {
+      padding: 30px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 12px;
+      border: 1px dashed var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    .footer {
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      font-size: 10.5px;
+      color: var(--muted);
+    }
+
+    .up   { color: var(--bad); font-weight: 600; }
+    .down { color: var(--ok);  font-weight: 600; }
+
+    /* ── Impact band ──────────────────────────────────────────── */
+    .impact-band {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin: 18px 0 8px;
+    }
+    .impact-item {
+      background: var(--ok-bg);
+      border: 1px solid #cfe8d8;
+      border-radius: 8px;
+      padding: 16px 14px;
+      text-align: center;
+    }
+    .impact-val { font-size: 21px; font-weight: 700; color: var(--ok); line-height: 1.1; }
+    .impact-lbl {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: var(--muted);
+      margin-top: 6px;
+    }
+    .impact-note { font-size: 10.5px; color: var(--muted); font-style: italic; margin-bottom: 8px; }
+  </style>
 </head>
 <body>
-    <div class="header">
-        <h1>HVAC Optimization Decision Report</h1>
-        <p><strong>Building ID:</strong> {{ building_id }} | <strong>Run Date:</strong> {{ run_date }}</p>
+
+  <!-- ── Masthead ── -->
+  <div class="masthead">
+    <div>
+      <div class="eyebrow">HVAC Intelligence Platform</div>
+      <h1>Optimization Decision Report</h1>
+    </div>
+    <div class="meta">
+      <div><span class="b">Building:</span> {{ building_id.replace('_', ' ') }}</div>
+      <div><span class="b">Generated:</span> {{ run_date }}</div>
+      <div style="margin-top:4px;">
+        <span class="badge {{ efficiency.grade }}">Grade {{ efficiency.grade }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="page">
+
+    <!-- 1 · Executive Summary -->
+    <div class="section"><span class="num">01</span><h2>Executive Summary</h2></div>
+    <div class="summary">{{ executive_summary }}</div>
+
+    <!-- Estimated annual impact -->
+    {% if impact and impact.kwh_saved %}
+    <div class="impact-band">
+      <div class="impact-item">
+        <div class="impact-val">{{ impact.savings_pct }}%</div>
+        <div class="impact-lbl">Optimization Potential</div>
+      </div>
+      <div class="impact-item">
+        <div class="impact-val">{{ "{:,}".format(impact.kwh_saved) }}</div>
+        <div class="impact-lbl">kWh Saved / yr</div>
+      </div>
+      <div class="impact-item">
+        <div class="impact-val">{{ impact.currency }}{{ "{:,}".format(impact.cost_saved) }}</div>
+        <div class="impact-lbl">Cost Saved / yr</div>
+      </div>
+      <div class="impact-item">
+        <div class="impact-val">{{ "{:,}".format(impact.co2_saved) }} kg</div>
+        <div class="impact-lbl">CO₂ Avoided / yr</div>
+      </div>
+    </div>
+    <div class="impact-note">
+      Estimated from a grade-derived optimization potential applied to this building's
+      annual consumption ({{ "{:,}".format(impact.annual_kwh) }} kWh) at
+      {{ impact.currency }}{{ impact.tariff }}/kWh and {{ "%.2f"|format(0.71) }} kg CO₂/kWh.
+      Figures are planning estimates, bounded to literature-supported savings ranges.
+    </div>
+    {% endif %}
+
+    <!-- 2 · Performance Dashboard -->
+    <div class="section"><span class="num">02</span><h2>Performance Dashboard</h2></div>
+    <div class="kpis">
+      <div class="kpi">
+        <div class="label">Avg iKW-TR</div>
+        <div class="value">{{ efficiency.current_avg_ikwtr }}</div>
+        <div class="sub">Benchmark ≤ 0.60</div>
+      </div>
+      <div class="kpi">
+        <div class="label">Efficiency Grade</div>
+        <div class="value"><span class="badge {{ efficiency.grade }}" style="font-size:18px;padding:4px 12px;">{{ efficiency.grade }}</span></div>
+        <div class="sub">A excellent · F critical</div>
+      </div>
+      <div class="kpi">
+        <div class="label">30-Day Trend</div>
+        <div class="value {{ 'up' if efficiency.trend_direction == 'up' else 'down' }}" style="font-size:24px;">
+          {{ '▲' if efficiency.trend_direction == 'up' else '▼' }} {{ efficiency.trend_percentage }}%
+        </div>
+        <div class="sub">{{ 'Degrading' if efficiency.trend_direction == 'up' else 'Improving' }}</div>
+      </div>
     </div>
 
-    <div class="executive-summary">
-        <h2>1. Executive Summary</h2>
-        <p>{{ executive_summary }}</p>
-    </div>
-
-    <h2>2. Data Quality Scorecard</h2>
+    <!-- 3 · Data Quality -->
+    {% if data_quality_scorecard %}
+    <div class="section"><span class="num">03</span><h2>Data Quality Scorecard</h2></div>
     <table>
-        <thead>
-            <tr>
-                <th>Column</th>
-                <th>Completeness %</th>
-                <th>Quality Flag</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in data_quality_scorecard %}
-            <tr>
-                <td>{{ row.column }}</td>
-                <td>{{ row.completeness }}%</td>
-                <td>{{ row.quality_flag }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
-
-    <div class="page-break"></div>
-
-    <h2>3. Efficiency Dashboard</h2>
-    <div class="dashboard">
-        <div class="dashboard-item">
-            <h3>Current Avg iKW-TR</h3>
-            <div class="dashboard-number">{{ efficiency.current_avg_ikwtr }}</div>
-            <p>Benchmark: 0.60</p>
-        </div>
-        <div class="dashboard-item">
-            <h3>Efficiency Grade</h3>
-            <span class="badge {{ efficiency.grade }}">{{ efficiency.grade }}</span>
-        </div>
-        <div class="dashboard-item">
-            <h3>30-Day Trend</h3>
-            <div class="{{ 'trend-up' if efficiency.trend_direction == 'up' else 'trend-down' }}">
-                {{ '↑' if efficiency.trend_direction == 'up' else '↓' }} {{ efficiency.trend_percentage }}%
+      <thead><tr><th style="width:32%;">Column</th><th style="width:48%;">Completeness</th><th>Quality</th></tr></thead>
+      <tbody>
+        {% for row in data_quality_scorecard %}
+        <tr>
+          <td class="mono">{{ row.column }}</td>
+          <td>
+            <div class="meter">
+              <div class="track">
+                <div class="fill" style="width:{{ row.completeness }}%;background:{% if row.completeness|float >= 95 %}#1b7a3d{% elif row.completeness|float >= 80 %}#555555{% else %}#c0392b{% endif %};"></div>
+              </div>
+              <span style="min-width:42px;text-align:right;">{{ row.completeness }}%</span>
             </div>
-        </div>
-    </div>
-
-    <h2>4. Anomaly Log</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Timestamp</th>
-                <th>Parameter</th>
-                <th>Severity</th>
-                <th>Root Cause</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in anomaly_report %}
-            <tr>
-                <td>{{ item.timestamp }}</td>
-                <td>{{ item.parameter }}</td>
-                <td><span class="badge {{ item.severity | upper }}">{{ item.severity }}</span></td>
-                <td>{{ item.root_cause }}</td>
-                <td>{{ item.description }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
+          </td>
+          <td><span class="badge {{ row.quality_flag }}">{{ row.quality_flag }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
     </table>
+    {% endif %}
 
-    <div class="page-break"></div>
-    
-    <h2>5. Energy Forecast & Charts</h2>
-    <div class="chart-container">
-        <h3>24-Hour Energy Demand Forecast</h3>
-        <img src="data:image/png;base64,{{ forecast_chart_b64 }}" alt="Forecast Chart">
+    <!-- 4 · Anomaly Log -->
+    <div class="section"><span class="num">04</span><h2>Anomaly Log</h2>
+      {% if total_anomalies is not none %}<span style="margin-left:auto;font-size:11px;font-weight:600;color:var(--muted);">{{ total_anomalies }} genuine anomal{{ 'y' if total_anomalies == 1 else 'ies' }} detected{% if anomaly_report|length < total_anomalies %} · showing top {{ anomaly_report|length }}{% endif %}</span>{% endif %}
+    </div>
+    {% if anomaly_report %}
+    <table>
+      <thead><tr><th>Timestamp</th><th>Parameter</th><th>Severity</th><th>Root Cause</th><th>Description</th></tr></thead>
+      <tbody>
+        {% for item in anomaly_report %}
+        <tr>
+          <td class="mono">{{ item.timestamp }}</td>
+          <td>{{ item.parameter }}</td>
+          <td><span class="badge {{ item.severity | upper }}">{{ item.severity }}</span></td>
+          <td>{{ item.root_cause }}</td>
+          <td style="color:var(--muted);">{{ item.description }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <div class="placeholder">No anomalies detected in this analysis window.</div>
+    {% endif %}
+
+  </div>
+
+  <!-- ── Page 2 · Charts ── -->
+  <div class="page page-break">
+    <div class="section"><span class="num">05</span><h2>Energy Forecast &amp; Charts</h2></div>
+
+    <div class="chart">
+      <h3>24-Hour Energy Demand Forecast</h3>
+      {% if forecast_chart_b64 %}<img src="data:image/png;base64,{{ forecast_chart_b64 }}" alt="Forecast" />
+      {% else %}<div class="placeholder">Forecast chart not available for this run.</div>{% endif %}
     </div>
 
-    <div class="chart-container">
-        <h3>iKW-TR Efficiency Trend</h3>
-        <img src="data:image/png;base64,{{ efficiency_chart_b64 }}" alt="Efficiency Trend Chart">
+    <div class="chart">
+      <h3>iKW-TR Efficiency Trend</h3>
+      {% if efficiency_chart_b64 %}<img src="data:image/png;base64,{{ efficiency_chart_b64 }}" alt="Efficiency" />
+      {% else %}<div class="placeholder">Efficiency trend chart not available.</div>{% endif %}
     </div>
 
-    <div class="chart-container">
-        <h3>Energy Consumption Heatmap</h3>
-        <img src="data:image/png;base64,{{ heatmap_chart_b64 }}" alt="Energy Heatmap Chart">
+    <div class="chart">
+      <h3>Energy Consumption Heatmap (Hour × Day)</h3>
+      {% if heatmap_chart_b64 %}<img src="data:image/png;base64,{{ heatmap_chart_b64 }}" alt="Heatmap" />
+      {% else %}<div class="placeholder">Heatmap not available for this run.</div>{% endif %}
     </div>
+  </div>
 
-    <div class="page-break"></div>
-
-    <h2>6. Top 5 Recommendations</h2>
-    {% for rec in recommendations %}
-    <div class="card" style="border-left: 5px solid {% if rec.priority == 'CRITICAL' %}#c0392b{% elif rec.priority == 'HIGH' %}#e67e22{% elif rec.priority == 'MEDIUM' %}#f39c12{% else %}#27ae60{% endif %};">
-        <div class="card-header">
-            <h3>#{{ loop.index }} - {{ rec.action }}</h3>
-            <span class="badge {{ rec.priority | upper }}">{{ rec.category }}</span>
+  <!-- ── Page 3 · Recommendations ── -->
+  <div class="page page-break">
+    <div class="section"><span class="num">06</span><h2>Optimization Recommendations</h2></div>
+    {% if recommendations %}
+      {% for rec in recommendations %}
+      <div class="rec {{ rec.priority | upper if rec.priority else 'MEDIUM' }}">
+        <div class="head">
+          <div>
+            <div class="tag">Recommendation #{{ loop.index }} · {{ rec.category }}</div>
+            <div class="title">{{ rec.action }}</div>
+          </div>
+          <span class="badge {{ rec.priority | upper if rec.priority else 'MEDIUM' }}">{{ rec.priority | upper if rec.priority else 'MEDIUM' }}</span>
         </div>
-        <p><strong>Rationale:</strong> {{ rec.rationale }}</p>
-        <p><strong>Expected Impact:</strong> {{ rec.expected_impact }}</p>
-    </div>
-    {% endfor %}
+        <p><span class="b">Rationale:</span> {{ rec.rationale }}</p>
+        <p><span class="b">Expected Impact:</span> {{ rec.expected_impact }}</p>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="placeholder">No recommendations generated for this run.</div>
+    {% endif %}
 
-    <h2>7. Maintenance Priority</h2>
-    {% for maint in maintenance %}
-    <div class="card" style="border-left: 5px solid {% if maint.priority == 'CRITICAL' %}#c0392b{% elif maint.priority == 'HIGH' %}#e67e22{% elif maint.priority == 'MEDIUM' %}#f39c12{% else %}#27ae60{% endif %};">
-        <div class="card-header">
-            <h3>{{ maint.recommended_action }}</h3>
-            <span class="badge {{ maint.priority | upper }}">{{ maint.priority | upper }}</span>
+    <div class="section"><span class="num">07</span><h2>Maintenance Priority</h2></div>
+    {% if maintenance %}
+      {% for maint in maintenance %}
+      <div class="rec {{ maint.priority | upper if maint.priority else 'MEDIUM' }}">
+        <div class="head">
+          <div class="title">{{ maint.recommended_action }}</div>
+          <span class="badge {{ maint.priority | upper if maint.priority else 'MEDIUM' }}">{{ maint.priority | upper if maint.priority else 'MEDIUM' }}</span>
         </div>
-        <p><strong>Urgency:</strong> Act within {{ maint.urgency_days }} days</p>
+        <p>Act within <span class="b">{{ maint.urgency_days }} days</span> to prevent further degradation.</p>
+      </div>
+      {% endfor %}
+    {% else %}
+    <div class="placeholder">No maintenance actions required at this time.</div>
+    {% endif %}
+
+    <div class="footer">
+      <span>HVAC Intelligence Platform · Confidential</span>
+      <span>{{ building_id.replace('_', ' ') }} · {{ run_date }}</span>
     </div>
-    {% endfor %}
+  </div>
 
 </body>
 </html>

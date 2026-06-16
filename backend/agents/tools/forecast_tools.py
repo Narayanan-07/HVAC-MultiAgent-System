@@ -334,29 +334,54 @@ def predict_peak_demand_windows(forecast_json: str) -> str:
         logger.error(f"Peak demand prediction failed: {e}")
         return json.dumps({"error": str(e)})
     
+def _summarize_forecast(result: dict) -> dict:
+    """
+    Build a terse, token-cheap summary of a forecast result for the LLM.
+
+    The FULL forecast array (up to 168 rows) is saved to disk and read by the
+    reporter directly, so the agent never needs the whole array in its context.
+    Returning only this summary keeps a single request well under Groq's free
+    12K-token-per-minute limit.
+    """
+    fc = result.get("forecast", []) or []
+    yhats = [p.get("yhat", 0) for p in fc if isinstance(p, dict)]
+    return {
+        "model_used": result.get("model_used"),
+        "horizon_hours": result.get("horizon_hours"),
+        "forecast_points": len(fc),
+        "mape_on_training": result.get("mape_on_training"),
+        "peak_hours_count": len(result.get("peak_hours", []) or []),
+        "avg_kwh": round(sum(yhats) / len(yhats), 2) if yhats else 0,
+        "min_kwh": round(min(yhats), 2) if yhats else 0,
+        "max_kwh": round(max(yhats), 2) if yhats else 0,
+        "note": "Full hourly forecast saved to disk for the report; summary only returned to conserve tokens.",
+    }
+
+
 @tool("Best Forecast Model Selector")
 def select_best_forecast_model(data_path: str, horizon_hours: int, run_id: str = "unknown") -> str:
-    """Try Prophet, fallback to XGBoost"""
+    """Try Prophet, fallback to XGBoost. Saves the full forecast to disk and
+    returns only a compact summary (model, MAPE, peak count, kWh range)."""
     logger.info(f"🎯 Selecting best model for {horizon_hours}h...")
-    
+
     prophet_result_str = run_prophet_forecast.func(data_path, horizon_hours)
     prophet_result = json.loads(prophet_result_str)
-    
+
     if "error" not in prophet_result:
         logger.info("✅ Prophet successful")
         save_task_output(run_id, "forecast", prophet_result)
-        return json.dumps(prophet_result)
-    
+        return json.dumps(_summarize_forecast(prophet_result))
+
     logger.warning(f"Prophet failed, trying XGBoost...")
     xgb_result_str = run_xgboost_forecast.func(data_path, horizon_hours)
     xgb_result = json.loads(xgb_result_str)
-    
+
     if "error" not in xgb_result:
         logger.info("✅ XGBoost successful (fallback)")
         xgb_result["fallback_reason"] = prophet_result.get("error")
         save_task_output(run_id, "forecast", xgb_result)
-        return json.dumps(xgb_result)
-    
+        return json.dumps(_summarize_forecast(xgb_result))
+
     return json.dumps({
         "error": "Both models failed",
         "details": {

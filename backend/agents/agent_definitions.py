@@ -92,12 +92,12 @@ def create_forecast_agent():
         role="Energy Demand Forecaster",
         goal="Predict HVAC energy consumption 24-168 hours ahead",
         backstory="Data scientist specializing in time-series energy forecasting",
+        # Only expose the selector + weather to the LLM. The selector calls
+        # Prophet/XGBoost internally and returns a terse summary, keeping the
+        # request well under Groq's free 12K-token-per-minute limit.
         tools=[
-            fetch_weather_forecast, 
-            select_best_forecast_model, 
-            run_prophet_forecast, 
-            run_xgboost_forecast, 
-            predict_peak_demand_windows
+            fetch_weather_forecast,
+            select_best_forecast_model,
         ],
         llm=get_groq_llm(),
         verbose=True,
@@ -134,10 +134,10 @@ def create_reporter_agent():
         role="Technical Report Writer",
         goal="Produce a clear, complete, and actionable technical decision report",
         backstory="Engineering documentation specialist",
+        # Chart generators are NOT exposed to the LLM — they return huge base64
+        # PNG strings. render_html_report calls them internally and embeds the
+        # charts, so the agent only needs the two report tools.
         tools=[
-            generate_forecast_chart,
-            generate_efficiency_trend_chart,
-            generate_energy_heatmap,
             render_html_report,
             generate_pdf_report
         ],

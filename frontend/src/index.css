@@ -2,8 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Aptos Display typography (system font on Windows 11 / Office) ── */
+:root {
+  --kiwi: #2CFF05;
+  --kiwi-2: #BF00FF;
+  --yellow: #BF00FF;
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --border: #222222;
+  --text: #f7f7f5;
+  --muted: #6b6b6b;
+  --font: 'Aptos Display', 'Aptos', 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+* { font-family: var(--font); }
+
 @layer base {
-  body {
-    @apply bg-slate-950 text-slate-100 antialiased;
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    -webkit-font-smoothing: antialiased;
   }
+}
+
+/* ── Animations ── */
+@keyframes fadeIn   { from { opacity: 0; }                        to { opacity: 1; } }
+@keyframes slideUp  { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes popIn    { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: scale(1); } }
+@keyframes shimmer  { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(44,255,5,0.0); }
+  50%      { box-shadow: 0 0 0 4px rgba(44,255,5,0.12); }
+}
+
+.anim-fade   { animation: fadeIn .45s ease both; }
+.anim-rise   { animation: slideUp .5s cubic-bezier(.22,1,.36,1) both; }
+.anim-pop    { animation: popIn .3s ease both; }
+
+/* Shimmer used on the running progress bar */
+.kiwi-shimmer {
+  background: linear-gradient(90deg, var(--kiwi) 0%, var(--yellow) 50%, var(--kiwi) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Reusable hover lift for cards */
+.lift { transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease; }
+.lift:hover { transform: translateY(-2px); border-color: rgba(44,255,5,0.35) !important; }
+
+/* ── Custom scrollbar ── */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: #050505; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 6px; border: 2px solid #050505; }
+::-webkit-scrollbar-thumb:hover { background: var(--kiwi); }
+
+/* Selection */
+::selection { background: var(--kiwi); color: #000; }
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }

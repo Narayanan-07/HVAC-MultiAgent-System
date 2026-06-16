@@ -15,9 +15,9 @@ ingest_task = Task(
         "LLAMA GUARD: For your final answer, return EXACTLY this JSON string and nothing else:\n"
         "{\n"
         "  \"data_quality_report\": \"PASS\",\n"
-        "  \"processed_data_path\": \"data/processed/features_final.csv\",\n"
-        "  \"feature_summary\": \"Features engineered successfully\",\n"
-        "  \"row_count\": 5236414,\n"
+        "  \"processed_data_path\": \"{data_path}\",\n"
+        "  \"feature_summary\": \"Single-building dataset ready for analysis\",\n"
+        "  \"building_id\": \"{building_id}\",\n"
         "  \"column_list\": [\"timestamp\", \"building_id\", \"electricity_kwh\", \"iKW_TR\"]\n"
         "}"
     ),
@@ -27,9 +27,9 @@ ingest_task = Task(
 
 analyze_task = Task(
     description=(
-        "Analyze HVAC data for run_id: {run_id}\n\n"  # ← Tell agent what run_id is
-        "Use 'data/processed/features_final.csv' as data_path.\n\n"
-        "REQUIRED STEPS (in order):\n"
+        "Analyze HVAC data for building '{building_id}' (run_id: {run_id}).\n\n"
+        "Use '{data_path}' as data_path. This file contains ONLY this building's data.\n\n"
+        "REQUIRED STEPS (in order), passing data_path='{data_path}' to each:\n"
         "1. Call 'generate_data_quality_report' with run_id='{run_id}'\n"
         "2. Call 'detect_anomalies_isolation_forest' with run_id='{run_id}'\n"
         "3. Call 'classify_root_cause' with run_id='{run_id}'\n"
@@ -44,9 +44,10 @@ analyze_task = Task(
 
 forecast_task = Task(
     description=(
-        "Generate forecast for run_id {run_id}.\n\n"
+        "Generate an energy demand forecast for building '{building_id}' (run_id {run_id}).\n\n"
         "CRITICAL: Pass run_id='{run_id}' to forecast tools.\n\n"
-        "Use 'Best Forecast Model Selector' with data_path, horizon_hours, and run_id."
+        "Call 'Best Forecast Model Selector' with data_path='{data_path}', "
+        "horizon_hours={forecast_horizon_hours}, and run_id='{run_id}'."
     ),
     expected_output="JSON summary with model, mape",
     agent=forecast_agent,
