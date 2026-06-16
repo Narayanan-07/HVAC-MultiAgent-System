@@ -43,9 +43,17 @@ Commercial building HVAC systems consume nearly **40 percent of total building e
 
 ## Previews
 
+**Dashboard**
+
 <p align="center">
-  <img src="docs/dashboard.png" width="48%" alt="Dashboard Overview">
-  <img src="docs/report.png" width="48%" alt="Generated PDF Report">
+  <img src="docs/dashboard.png" width="100%" alt="HVAC Optimization Dashboard">
+</p>
+
+**Decision Report**
+
+<p align="center">
+  <img src="docs/report1.png" width="33%" alt="Decision report: performance dashboard and anomaly log">
+  <img src="docs/report2.png" width="65%" alt="Decision report: charts and recommendations">
 </p>
 
 ---
